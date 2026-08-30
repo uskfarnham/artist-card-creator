@@ -43,6 +43,15 @@ const quill = new Quill('#quillEditorContainer', {
   formats: ['bold', 'italic', 'underline', 'color', 'size', 'font', 'align']
 });
 
+// Referenced by main.js (fontFamily/fontSize/color) 
+// syncPropertiesPanel to reflect the selected element's style.
+const propInputs = {
+  fontFamily: document.getElementById('propFontFamily'),
+  fontSize: document.getElementById('propFontSize'),
+  color: document.getElementById('propColor')
+};
+
+
 // Guards against quill's own text-change firing while we're programmatically
 // loading content into it (e.g. when switching selected elements) — without
 // this, loading element A's content would immediately overwrite element A's

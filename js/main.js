@@ -48,14 +48,6 @@ const alignmentPropertiesGroup = document.getElementById('alignmentPropertiesGro
 const btnGroupToggle = document.getElementById('btnGroupToggle');
 const paletteSwatches = document.getElementById('paletteSwatches');
 
-// Referenced by text-formatting.js (fontFamily/fontSize/color) and by
-// syncPropertiesPanel below to reflect the selected element's style.
-const propInputs = {
-  fontFamily: document.getElementById('propFontFamily'),
-  fontSize: document.getElementById('propFontSize'),
-  color: document.getElementById('propColor')
-};
-
 let isNudging = false;
 
 // --- Accordion Toggle -------------------------------------------------
