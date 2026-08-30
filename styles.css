@@ -1,0 +1,322 @@
+/* ==========================================================================
+   Artist Card Creator — Stylesheet
+   Extracted from the original Apps Script Index.html inline <style> block.
+
+   NOTE: the original had a large block of `!important` layout resets
+   (.app-container, .main-body, .left-toolbar, .right-panel, etc.) whose
+   sole purpose was to fight the Google Apps Script iframe sandbox, which
+   applied its own conflicting sizing. Now that this is a standalone static
+   page (no iframe), that whole layer is gone — the layout below achieves
+   the same result with plain flexbox and no !important overrides.
+   ========================================================================== */
+
+:root {
+  --card-width: 85mm;
+  --card-height: 55mm;
+  --safe-margin: 3mm;
+
+  --bg-color: #f3f4f6;
+  --panel-bg: #ffffff;
+  --border-color: #e5e7eb;
+  --accent-color: #2563eb;
+  --text-color: #1f2937;
+  --label-color: #6b7280;
+  --guide-color: #ec4899;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* app is a fixed single-screen tool, not a scrolling page */
+  font-family: Arial, sans-serif;
+  color: var(--text-color);
+  background: var(--bg-color);
+}
+
+.app-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Layout: Topbar --- */
+.topbar {
+  height: 64px;
+  min-height: 64px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 20;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  flex-shrink: 0;
+}
+
+.brand-title { font-size: 1.1rem; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 12px; letter-spacing: -0.02em; }
+.brand-subtitle { font-size: 0.75rem; font-weight: 500; color: var(--label-color); background: #f3f4f6; padding: 4px 8px; border-radius: 6px; letter-spacing: 0; }
+.topbar-actions { display: flex; gap: 8px; align-items: center; }
+
+/* --- Layout: Main Body (three columns) --- */
+.main-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0; /* allows children to scroll instead of overflowing the page */
+  overflow: hidden;
+}
+
+/* --- Layout: Left Toolbar Column --- */
+.left-toolbar {
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  height: 100%;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* --- Layout: Right Panel Column --- */
+.right-panel {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  height: 100%;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* --- Shared inner scroll container for both side panels --- */
+.sidebar-scroll-box {
+  flex: 1 1 0%;
+  min-height: 0; /* lets the box shrink so overflow-y can actually scroll */
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.left-toolbar .sidebar-scroll-box { padding: 16px; }
+.right-panel .sidebar-scroll-box { padding: 24px; }
+
+/* --- Center Workspace Canvas Area --- */
+.workspace {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 40px;
+  background-color: #e5e5f7;
+  background-image: radial-gradient(#c7c7d4 1px, transparent 1px);
+  background-size: 20px 20px;
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* --- Global Cursor Overrides for Smooth Dragging --- */
+body.is-dragging * { cursor: move !important; }
+body.is-resizing-nwse * { cursor: nwse-resize !important; }
+body.is-resizing-nesw * { cursor: nesw-resize !important; }
+
+/* --- Layout: Card Canvas Box --- */
+.canvas-container {
+  width: 321px;
+  height: 208px;
+  min-width: 321px;
+  min-height: 208px;
+  background: #ffffff;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05);
+  overflow: hidden;
+  display: block;
+  flex-shrink: 0;
+  will-change: transform;
+  transition: transform 0.05s linear;
+}
+
+.safe-zone {
+  position: absolute; top: var(--safe-margin); left: var(--safe-margin);
+  right: var(--safe-margin); bottom: var(--safe-margin);
+  border: 1.5px dotted #ff4757; opacity: 0.6; pointer-events: none; z-index: 9998;
+}
+
+/* --- UI Components: Buttons --- */
+.btn {
+  background: var(--accent-color); color: white; border: none; padding: 10px 16px;
+  font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer;
+  transition: all 0.15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+}
+.btn:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(37,99,235,0.2); }
+.btn:active { transform: translateY(0); box-shadow: none; }
+.btn.secondary { background: #ffffff; color: #374151; border: 1px solid #d1d5db; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.btn.secondary:hover { background: #f9fafb; border-color: #9ca3af; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
+.btn.danger { background: #ffffff; color: #ef4444; border: 1px solid #fca5a5; }
+.btn.danger:hover { background: #fef2f2; border-color: #ef4444; box-shadow: 0 4px 6px rgba(239,68,68,0.1); }
+
+/* --- UI Components: Typography Toolbar Row --- */
+.toolbar-row {
+  display: flex; border: 1px solid var(--border-color); border-radius: 6px;
+  overflow: hidden; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+.toolbar-btn {
+  flex: 1; background: #fff; border: none; border-right: 1px solid var(--border-color);
+  padding: 8px 0; cursor: pointer; font-size: 14px; color: #4b5563; transition: all 0.1s;
+  display: flex; align-items: center; justify-content: center;
+}
+.toolbar-btn:last-child { border-right: none; }
+.toolbar-btn:hover { background: #f3f4f6; color: #111827; }
+.toolbar-btn.active { background: #eff6ff; color: var(--accent-color); font-weight: bold; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+
+/* --- UI Components: Forms & Typography --- */
+h2 { font-size: 0.75rem; text-transform: uppercase; color: var(--label-color); margin-bottom: 16px; letter-spacing: 0.05em; font-weight: 700; }
+hr { border: none; border-top: 1px solid var(--border-color); margin: 24px 0; }
+
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--label-color); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+.form-control {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px;
+  font-size: 13px; font-family: inherit; color: var(--text-color); transition: border-color 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+.form-control:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+textarea.form-control { resize: vertical; min-height: 80px; font-family: monospace; font-size: 12px; }
+
+/* --- Quill editor container (replaces the old .rich-editor contenteditable div) --- */
+#quillEditorContainer {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 13px;
+}
+#quillEditorContainer .ql-editor {
+  min-height: 80px;
+  max-height: 200px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+#quillEditorContainer .ql-editor:focus,
+#quillEditorContainer.ql-container.ql-focused {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+/* --- UI Components: Sliders & Colors --- */
+input[type="range"] { -webkit-appearance: none; width: 100%; background: transparent; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-color); cursor: pointer; margin-top: -6px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #e5e7eb; border-radius: 2px; }
+input[type="range"]:focus { outline: none; }
+
+.color-swatches { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.swatch:hover { transform: scale(1.15); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.color-custom-row { display: flex; align-items: center; gap: 12px; background: #f9fafb; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); }
+input[type="color"].form-control { padding: 0; height: 32px; width: 48px; cursor: pointer; border: none; border-radius: 4px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+/* --- UI Components: Tooltips --- */
+.tooltip-container { position: relative; display: inline-flex; align-items: center; cursor: help; }
+.info-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; background: #e5e7eb; color: #6b7280; border-radius: 50%; font-size: 10px; font-weight: bold; margin-left: 6px; font-family: monospace; }
+.tooltip-text { visibility: hidden; width: 220px; background-color: #1f2937; color: #fff; text-align: center; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1000; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.2s; font-size: 11px; font-weight: normal; line-height: 1.4; pointer-events: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+.tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+/* --- Smart Guides --- */
+#smart-guides-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 9999; }
+.smart-guide { position: absolute; background-color: var(--guide-color); box-shadow: 0 0 2px rgba(255,0,255,0.5); }
+.smart-guide.vertical { width: 1px; top: 0; bottom: 0; }
+.smart-guide.horizontal { height: 1px; left: 0; right: 0; }
+
+/* --- Draggable Elements & Handles --- */
+.design-element { position: absolute; cursor: move; user-select: none; border: 1.5px solid transparent; }
+.design-element.selected { border: 1.5px dashed var(--accent-color); }
+.element-content { width: 100%; height: 100%; outline: none; overflow: hidden; display: block; white-space: pre-wrap; word-wrap: break-word; }
+img.element-content { object-fit: fill; pointer-events: none; }
+/* NOTE: canvas text is now a read-only preview (Quill lives in the sidebar only),
+   so the old .element-content[contenteditable="true"] editing styles are removed. */
+.resize-handle { position: absolute; width: 10px; height: 10px; background: #ffffff; border: 2px solid var(--accent-color); border-radius: 50%; display: none; z-index: 11; }
+.design-element.single-selected .resize-handle { display: block; }
+.resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+/* --- Accordion Functional Sidebar Components --- */
+.accordion-item {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.accordion-trigger {
+  width: 100%;
+  padding: 12px;
+  background: #f9fafb;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.15s;
+}
+.accordion-trigger:hover { background: #f3f4f6; }
+.accordion-trigger span { font-size: 10px; color: var(--label-color); transition: transform 0.2s; }
+
+.accordion-content {
+  padding: 16px;
+  display: none;
+  border-top: 1px solid var(--border-color);
+}
+
+.accordion-item.active .accordion-content { display: block; }
+.accordion-item.active .accordion-trigger span { transform: rotate(180deg); }
+
+#textPropertiesGroup,
+#imagePropertiesGroup,
+#layerPropertiesGroup,
+#alignmentPropertiesGroup {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+/* --- Canvas Background Overlay Element --- */
+.canvas-bg-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.1s linear;
+}

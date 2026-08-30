@@ -1,0 +1,277 @@
+/**
+ * main.js
+ * ---------------------------------------------------------------------------
+ * DOM references not already claimed by a feature-specific module, general
+ * event wiring (add/undo/redo/save/load/zoom/keyboard shortcuts/layering/
+ * alignment), and the two central sync functions — syncSelectionToDOM and
+ * syncPropertiesPanel — that every other module calls into after mutating
+ * state or the DOM.
+ *
+ * SIMPLER THAN THE ORIGINAL: the old syncPropertiesPanel re-attached the
+ * bold/italic/underline button listeners every single time it ran (once per
+ * selection change) — a listener-duplication pattern that worked but was
+ * wasteful and fragile. Since text-formatting.js now attaches those
+ * listeners exactly once at load time and reads the current Quill selection
+ * live when clicked, that re-binding block is gone entirely.
+ *
+ * Also gone: disableEditMode/isEditingText. Canvas text was previously made
+ * contentEditable on double-click and had to be explicitly un-set elsewhere
+ * (e.g. on zoom). Since canvas text is now always a read-only preview
+ * (Quill in the sidebar is the only editing surface), there's nothing to
+ * disable.
+ * ---------------------------------------------------------------------------
+ */
+
+// --- DOM References -------------------------------------------------------
+
+const canvas = document.getElementById('canvas');
+const smartGuidesContainer = document.getElementById('smart-guides-container');
+const gridSnapToggle = document.getElementById('gridSnapToggle');
+
+const addTextBtn = document.getElementById('addTextBtn');
+const addImageBtn = document.getElementById('addImageBtn');
+const imageUploadInput = document.getElementById('imageUploadInput');
+
+const undoBtn = document.getElementById('undoBtn');
+const redoBtn = document.getElementById('redoBtn');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const printBtn = document.getElementById('printBtn'); // click handler lives in print.js
+const loadJsonInput = document.getElementById('loadJsonInput');
+const deleteElementBtn = document.getElementById('deleteElementBtn');
+
+const propertiesPanel = document.getElementById('propertiesPanel');
+const textPropertiesGroup = document.getElementById('textPropertiesGroup');
+const imagePropertiesGroup = document.getElementById('imagePropertiesGroup');
+const layerPropertiesGroup = document.getElementById('layerPropertiesGroup');
+const alignmentPropertiesGroup = document.getElementById('alignmentPropertiesGroup');
+const btnGroupToggle = document.getElementById('btnGroupToggle');
+const paletteSwatches = document.getElementById('paletteSwatches');
+
+// Referenced by text-formatting.js (fontFamily/fontSize/color) and by
+// syncPropertiesPanel below to reflect the selected element's style.
+const propInputs = {
+  fontFamily: document.getElementById('propFontFamily'),
+  fontSize: document.getElementById('propFontSize'),
+  color: document.getElementById('propColor')
+};
+
+let isNudging = false;
+
+// --- Accordion Toggle -------------------------------------------------
+
+document.querySelectorAll('.accordion-trigger').forEach(trigger => {
+  trigger.addEventListener('click', () => {
+    const item = trigger.closest('.accordion-item');
+    item.classList.toggle('active');
+  });
+});
+
+// --- Element Creation / History / Save-Load Wiring -------------------------
+
+addTextBtn.addEventListener('click', createTextElement);
+addImageBtn.addEventListener('click', () => imageUploadInput.click());
+imageUploadInput.addEventListener('change', handleImageUpload);
+
+undoBtn.addEventListener('click', () => loadHistory(historyIndex - 1));
+redoBtn.addEventListener('click', () => loadHistory(historyIndex + 1));
+deleteElementBtn.addEventListener('click', deleteSelectedElements);
+
+saveBtn.addEventListener('click', saveStateToDisk);
+loadBtn.addEventListener('click', () => loadJsonInput.click());
+loadJsonInput.addEventListener('change', loadStateFromDisk);
+
+// --- Workspace Zoom ---------------------------------------------------
+
+const canvasZoomSlider = document.getElementById('canvasZoomSlider');
+const zoomDisplay = document.getElementById('zoomDisplay');
+
+canvasZoomSlider.addEventListener('input', (e) => {
+  const zoomValue = parseInt(e.target.value);
+  zoomDisplay.textContent = `${zoomValue}%`;
+
+  const scaleMultiplier = zoomValue / 100;
+  canvas.style.setProperty('transform', `scale(${scaleMultiplier})`, 'important');
+  canvas.style.transformOrigin = 'center center';
+});
+
+// --- Layering -----------------------------------------------------------
+
+document.getElementById('btnFront').addEventListener('click', () => moveLayer('front'));
+document.getElementById('btnForward').addEventListener('click', () => moveLayer('forward'));
+document.getElementById('btnBackward').addEventListener('click', () => moveLayer('backward'));
+document.getElementById('btnBack').addEventListener('click', () => moveLayer('back'));
+
+// --- Alignment ---------------------------------------------------------
+
+document.getElementById('btnAlignLeft').addEventListener('click', () => alignElements('left'));
+document.getElementById('btnAlignCenter').addEventListener('click', () => alignElements('center'));
+document.getElementById('btnAlignRight').addEventListener('click', () => alignElements('right'));
+document.getElementById('btnAlignTop').addEventListener('click', () => alignElements('top'));
+document.getElementById('btnAlignMiddle').addEventListener('click', () => alignElements('middle'));
+document.getElementById('btnAlignBottom').addEventListener('click', () => alignElements('bottom'));
+
+// --- Canvas Deselection -------------------------------------------------
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.target === canvas || e.target.classList.contains('safe-zone')) {
+    state.elements.forEach(el => el.selected = false);
+    syncSelectionToDOM();
+  }
+});
+
+// --- Keyboard Shortcuts -------------------------------------------------
+
+window.addEventListener('keydown', (e) => {
+  // isContentEditable covers typing inside Quill's editor (its root div is
+  // contenteditable), so shortcuts below correctly don't fire while typing.
+  const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); loadHistory(historyIndex - 1); }
+    else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); loadHistory(historyIndex + 1); }
+  }
+
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
+    e.preventDefault();
+    deleteSelectedElements();
+  }
+
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !isInput) {
+    e.preventDefault();
+    const selected = state.elements.filter(el => el.selected);
+    if (selected.length === 0) return;
+
+    const currentZoomSlider = document.getElementById('canvasZoomSlider');
+    const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
+
+    const baseStep = e.shiftKey ? 10 : 1;
+    const adjustedStep = Math.round(baseStep / zoomScale);
+
+    selected.forEach(el => {
+      if (e.key === 'ArrowUp') el.y -= adjustedStep;
+      if (e.key === 'ArrowDown') el.y += adjustedStep;
+      if (e.key === 'ArrowLeft') el.x -= adjustedStep;
+      if (e.key === 'ArrowRight') el.x += adjustedStep;
+      applyStylesToDOM(el.id);
+    });
+    isNudging = true;
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && isNudging) {
+    pushHistory();
+    isNudging = false;
+  }
+});
+
+// --- Color Palette ---------------------------------------------------------
+
+function renderPalette() {
+  paletteSwatches.innerHTML = '';
+  state.palette.forEach(color => {
+    const swatch = document.createElement('div');
+    swatch.className = 'swatch';
+    swatch.style.background = color;
+    swatch.dataset.color = color;
+    swatch.addEventListener('mousedown', (e) => e.preventDefault());
+    swatch.addEventListener('click', () => {
+      propInputs.color.value = color;
+      propInputs.color.dispatchEvent(new Event('change')); // reuses the change handler in text-formatting.js
+    });
+    paletteSwatches.appendChild(swatch);
+  });
+}
+
+// --- Selection & Properties Panel Sync -------------------------------------
+
+function syncSelectionToDOM() {
+  const selectedCount = state.elements.filter(e => e.selected).length;
+
+  state.elements.forEach(elData => {
+    const elNode = document.getElementById(elData.id);
+    if (!elNode) return;
+
+    if (elData.selected) {
+      elNode.classList.add('selected');
+      if (selectedCount === 1) elNode.classList.add('single-selected');
+      else elNode.classList.remove('single-selected');
+    } else {
+      elNode.classList.remove('selected', 'single-selected');
+    }
+  });
+
+  syncPropertiesPanel();
+}
+
+function syncPropertiesPanel() {
+  const selected = state.elements.filter(e => e.selected);
+
+  propertiesPanel.style.display = 'flex';
+
+  textPropertiesGroup.style.display = 'none';
+  imagePropertiesGroup.style.display = 'none';
+  layerPropertiesGroup.style.display = 'none';
+  alignmentPropertiesGroup.style.display = 'none';
+  deleteElementBtn.style.display = 'none';
+
+  const targetScrollBox = propertiesPanel.querySelector('.sidebar-scroll-box') || propertiesPanel;
+
+  let placeholderNode = document.getElementById('sidebarPlaceholderState');
+  if (!placeholderNode) {
+    placeholderNode = document.createElement('div');
+    placeholderNode.id = 'sidebarPlaceholderState';
+    placeholderNode.style.cssText = 'flex: 1; text-align: center; color: var(--label-color); padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; margin: 0;';
+    placeholderNode.innerHTML = '<span style="font-size: 32px; opacity: 0.6;">🎛️</span><p style="font-size: 13px; font-weight: 500; line-height: 1.5; margin: 0; max-width: 200px;">Select an element on the canvas to configure its properties.</p>';
+    targetScrollBox.appendChild(placeholderNode);
+  }
+
+  if (selected.length === 0) {
+    placeholderNode.style.display = 'flex';
+    return;
+  }
+
+  placeholderNode.style.display = 'none';
+  deleteElementBtn.style.display = 'block';
+
+  if (selected.length === 1) {
+    layerPropertiesGroup.style.display = 'block';
+    const elData = selected[0];
+
+    if (elData.type === 'text') {
+      textPropertiesGroup.style.display = 'block';
+
+      // Load this element's content into Quill for editing/preview. The
+      // isLoadingIntoQuill guard (text-formatting.js) prevents this from
+      // being mistaken for a user edit and re-triggering a state write.
+      isLoadingIntoQuill = true;
+      quill.root.innerHTML = elData.content;
+      isLoadingIntoQuill = false;
+
+      propInputs.fontFamily.value = elData.style.fontFamily;
+      propInputs.fontSize.value = elData.style.fontSize;
+      propInputs.color.value = elData.style.color;
+    } else if (elData.type === 'image') {
+      imagePropertiesGroup.style.display = 'block';
+    }
+  } else if (selected.length > 1) {
+    alignmentPropertiesGroup.style.display = 'block';
+
+    const firstGroupId = selected[0].groupId;
+    const allSameGroup = firstGroupId && selected.every(el => el.groupId === firstGroupId);
+
+    if (allSameGroup) {
+      btnGroupToggle.textContent = 'Ungroup';
+      btnGroupToggle.onclick = ungroupSelected;
+    } else {
+      btnGroupToggle.textContent = 'Group';
+      btnGroupToggle.onclick = groupSelected;
+    }
+  }
+}
+
+// --- Init ---------------------------------------------------------------
+
+renderPalette();
+pushHistory();
