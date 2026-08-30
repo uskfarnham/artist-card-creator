@@ -169,11 +169,11 @@ function renderElementToDOM(elData) {
   handles.forEach(pos => {
     const handle = document.createElement('div');
     handle.className = `resize-handle ${pos}`;
-    handle.addEventListener('mousedown', (e) => initResize(e, elData.id, pos));
+    handle.addEventListener('pointerdown', (e) => initResize(e, elData.id, pos));
     elNode.appendChild(handle);
   });
 
-  elNode.addEventListener('mousedown', (e) => {
+  elNode.addEventListener('pointerdown', (e) => {
     if (e.target.classList.contains('resize-handle')) return;
     initDrag(e, elData.id);
   });

@@ -57,6 +57,22 @@ const paletteSwatches = document.getElementById('paletteSwatches');
 
 let isNudging = false;
 
+// Blurs whatever currently has focus, if anything. Called at the start of
+// any canvas interaction (drag, resize, click-to-deselect) — without this,
+// a previously-focused sidebar control (Quill, a color picker, a range
+// slider, etc.) silently keeps focus even after clicking elsewhere, which
+// then blocks arrow-key element nudging (see the `isInput` check below,
+// which correctly excludes focused inputs/contentEditable — the bug was
+// that focus lingered somewhere it shouldn't have, not that check itself).
+// General-purpose despite an earlier, Quill-only version of this having
+// briefly lived in text-formatting.js.
+function releaseFocusForCanvasInteraction() {
+  const active = document.activeElement;
+  if (active && active !== document.body && typeof active.blur === 'function') {
+    active.blur();
+  }
+}
+
 // --- Accordion Toggle -------------------------------------------------
 
 document.querySelectorAll('.accordion-trigger').forEach(trigger => {
@@ -112,9 +128,9 @@ document.getElementById('btnAlignBottom').addEventListener('click', () => alignE
 
 // --- Canvas Deselection -------------------------------------------------
 
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('pointerdown', (e) => {
   if (e.target === canvas || e.target.classList.contains('safe-zone')) {
-    exitTextEditingIfActive();
+    releaseFocusForCanvasInteraction();
     state.elements.forEach(el => el.selected = false);
     syncSelectionToDOM();
   }

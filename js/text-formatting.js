@@ -98,22 +98,10 @@ const propInputs = {
 
 const quillEditorContainer = document.getElementById('quillEditorContainer');
 
-// Explicitly blurs Quill if it currently holds focus. Needed because
-// initDrag/initResize (drag-resize.js) call preventDefault() on their
-// mousedown (to stop the browser's default text-selection behavior while
-// dragging) — but that also blocks the browser's *default* behavior of
-// blurring whatever was previously focused. Without this, clicking a canvas
-// element to reposition it while Quill still has focus from an earlier edit
-// silently leaves Quill focused, and arrow-key presses go to Quill's text
-// cursor instead of nudging the element (the `isInput` check in main.js's
-// keydown handler correctly skips nudging while something contentEditable
-// has focus — the bug was that Quill kept focus when it shouldn't have,
-// not that check itself).
-function exitTextEditingIfActive() {
-  if (document.activeElement && quillEditorContainer.contains(document.activeElement)) {
-    document.activeElement.blur();
-  }
-}
+// NOTE: the general-purpose focus-release helper used by drag-resize.js and
+// main.js (releaseFocusForCanvasInteraction) now lives in main.js, since it
+// covers all sidebar controls, not just Quill. See PROJECT_STATUS.md for
+// the underlying issue.
 
 // Guards against quill's own text-change firing while we're programmatically
 // loading content into it (e.g. when switching selected elements) — without

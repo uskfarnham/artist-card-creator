@@ -71,40 +71,7 @@ function loadStateFromDisk(e) {
             state.background.fade = 0;
           }
 
-          bgTypeSelect.value = state.background.type;
-          canvasBgFadeSlider.value = state.background.fade;
-          bgFadeDisplay.textContent = `${state.background.fade}%`;
-
-          bgSolidGroup.style.display = state.background.type === 'color' ? 'block' : 'none';
-          bgGradientGroup.style.display = state.background.type === 'gradient' ? 'block' : 'none';
-          bgCustomGradientGroup.style.display = state.background.type === 'custom-gradient' ? 'block' : 'none';
-          bgImageGroup.style.display = state.background.type === 'image' ? 'block' : 'none';
-
-          if (state.background.type === 'color') {
-            canvasBgColorPicker.value = state.background.value;
-          } else if (state.background.type === 'gradient') {
-            bgGradientPreset.value = state.background.value;
-          } else if (state.background.type === 'custom-gradient') {
-            const valueStr = state.background.value;
-            const angleMatch = valueStr.match(/linear-gradient\s*\(\s*(\d+)deg/i);
-            const colorsMatch = valueStr.match(/(#[a-fA-F0-9]{6})/g);
-
-            if (angleMatch) {
-              gradientAngleSlider.value = angleMatch[1];
-              gradientAngleDisplay.textContent = angleMatch[1] + '°';
-            }
-            if (colorsMatch && colorsMatch.length >= 2) {
-              gradientColor1.value = colorsMatch[0];
-              gradientColor2.value = colorsMatch[1];
-            }
-          }
-
-          // Wrapped in a tiny timeout so the browser's DOM layer fully
-          // recognizes the slider/control values above before the canvas
-          // opacity/background is calculated from them.
-          setTimeout(() => {
-            updateCanvasBackground(state.background.value);
-          }, 10);
+          syncBackgroundControlsToState(); // background.js
         }
 
         state.elements.forEach(el => el.selected = false);

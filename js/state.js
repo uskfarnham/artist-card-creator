@@ -30,8 +30,9 @@ let historyIndex = -1;
 
 function pushHistory() {
   const clonedElements = JSON.parse(JSON.stringify(state.elements));
+  const clonedBackground = JSON.parse(JSON.stringify(state.background));
   historyStack = historyStack.slice(0, historyIndex + 1);
-  historyStack.push({ elements: clonedElements });
+  historyStack.push({ elements: clonedElements, background: clonedBackground });
   historyIndex++;
 }
 
@@ -41,6 +42,7 @@ function loadHistory(index) {
   const snapshot = historyStack[historyIndex];
 
   state.elements = JSON.parse(JSON.stringify(snapshot.elements));
+  state.background = JSON.parse(JSON.stringify(snapshot.background));
 
   Array.from(canvas.children).forEach(child => {
     if (child.id !== 'smart-guides-container' && !child.classList.contains('safe-zone')) {
@@ -49,5 +51,12 @@ function loadHistory(index) {
   });
 
   state.elements.forEach(el => renderElementToDOM(el));
+
+  // Restore background too, now that it's part of the snapshot — also fixes
+  // the background overlay div being deleted by the cleanup loop above
+  // (it isn't the guides container or safe-zone, so it got swept up) without
+  // ever being recreated until the next background edit.
+  syncBackgroundControlsToState(); // background.js — also re-applies to the DOM
+
   syncSelectionToDOM();
 }

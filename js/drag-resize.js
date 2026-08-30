@@ -184,7 +184,7 @@ function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isIma
 // --- Drag Engine (Multi-Select & Zoom Support) --------------------------
 
 function initDrag(e, id) {
-  exitTextEditingIfActive();
+  releaseFocusForCanvasInteraction();
   e.preventDefault();
   e.stopPropagation();
 
@@ -220,7 +220,7 @@ function initDrag(e, id) {
 
   document.body.classList.add('is-dragging');
 
-  function onMouseMove(ev) {
+  function onPointerMove(ev) {
     const currentZoomSlider = document.getElementById('canvasZoomSlider');
     const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
 
@@ -243,22 +243,22 @@ function initDrag(e, id) {
     });
   }
 
-  function onMouseUp() {
+  function onPointerUp() {
     document.body.classList.remove('is-dragging');
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
     clearSmartGuides();
     pushHistory();
   }
 
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
 }
 
 // --- Resize Engine --------------------------------------------------------
 
 function initResize(e, id, handlePos) {
-  exitTextEditingIfActive();
+  releaseFocusForCanvasInteraction();
   e.preventDefault();
   e.stopPropagation();
 
@@ -279,7 +279,7 @@ function initResize(e, id, handlePos) {
   const cursorClass = (handlePos === 'nw' || handlePos === 'se') ? 'is-resizing-nwse' : 'is-resizing-nesw';
   document.body.classList.add(cursorClass);
 
-  function onMouseMove(ev) {
+  function onPointerMove(ev) {
     const currentZoomSlider = document.getElementById('canvasZoomSlider');
     const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
 
@@ -325,14 +325,14 @@ function initResize(e, id, handlePos) {
     applyStylesToDOM(id);
   }
 
-  function onMouseUp() {
+  function onPointerUp() {
     document.body.classList.remove(cursorClass);
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
     clearSmartGuides();
     pushHistory();
   }
 
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
 }
