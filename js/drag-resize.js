@@ -184,6 +184,7 @@ function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isIma
 // --- Drag Engine (Multi-Select & Zoom Support) --------------------------
 
 function initDrag(e, id) {
+  exitTextEditingIfActive();
   e.preventDefault();
   e.stopPropagation();
 
@@ -257,6 +258,7 @@ function initDrag(e, id) {
 // --- Resize Engine --------------------------------------------------------
 
 function initResize(e, id, handlePos) {
+  exitTextEditingIfActive();
   e.preventDefault();
   e.stopPropagation();
 

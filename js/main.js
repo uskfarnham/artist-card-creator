@@ -36,7 +36,9 @@ const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
 const saveBtn = document.getElementById('saveBtn');
 const loadBtn = document.getElementById('loadBtn');
-const printBtn = document.getElementById('printBtn'); // click handler lives in print.js
+// Note: printBtn is declared in print.js, not here — its click handler
+// (print.js) runs as a top-level statement before main.js loads, so the
+// declaration has to live there. See print.js header comment.
 const loadJsonInput = document.getElementById('loadJsonInput');
 const deleteElementBtn = document.getElementById('deleteElementBtn');
 
@@ -47,6 +49,11 @@ const layerPropertiesGroup = document.getElementById('layerPropertiesGroup');
 const alignmentPropertiesGroup = document.getElementById('alignmentPropertiesGroup');
 const btnGroupToggle = document.getElementById('btnGroupToggle');
 const paletteSwatches = document.getElementById('paletteSwatches');
+
+// Note: propInputs is declared in text-formatting.js, not here — its
+// addEventListener calls run as top-level statements before main.js loads,
+// so the declaration has to live there. See print.js/printBtn for the same
+// pattern, and PROJECT_STATUS.md "Key Learnings" for the general rule.
 
 let isNudging = false;
 
@@ -107,6 +114,7 @@ document.getElementById('btnAlignBottom').addEventListener('click', () => alignE
 
 canvas.addEventListener('mousedown', (e) => {
   if (e.target === canvas || e.target.classList.contains('safe-zone')) {
+    exitTextEditingIfActive();
     state.elements.forEach(el => el.selected = false);
     syncSelectionToDOM();
   }
@@ -241,7 +249,7 @@ function syncPropertiesPanel() {
       quill.root.innerHTML = elData.content;
       isLoadingIntoQuill = false;
 
-      propInputs.fontFamily.value = elData.style.fontFamily;
+      setFontFamilySelectValue(propInputs.fontFamily, elData.style.fontFamily);
       propInputs.fontSize.value = elData.style.fontSize;
       propInputs.color.value = elData.style.color;
     } else if (elData.type === 'image') {

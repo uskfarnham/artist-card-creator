@@ -162,6 +162,35 @@ items below are resolved *in design*, not yet confirmed working.
         resize). The earlier "center+radius, single handle" category turned
         out to be unnecessary once the distortion requirement was considered
         — simpler than originally sketched, not more complex.
+      - **Independently draggable vertices (polygon/star), decided
+        2026-08-30:** rather than only symmetric box-corner resize, individual
+        vertices should be directly draggable to create custom/irregular
+        shapes. This reuses the same "drag this one point" mechanism the line
+        needs for its endpoints, generalized from 2 points to N — genuine code
+        reuse, not a parallel implementation. Concretely:
+        - Polygon/star store an explicit `points: [{x,y}, ...]` array (like
+          the line's endpoints, generalized) rather than being purely
+          formula-derived from `rx/ry` at render time.
+        - One handle per vertex, looped rather than a fixed set of 4.
+        - Dragging a **corner** (bounding-box resize) regenerates *all* points
+          fresh from the `rx/ry` formula — discards any custom vertex
+          tweaks, "resets to regular."
+        - Dragging an **individual vertex handle** mutates just that one
+          point — creates an irregular/custom variant.
+        - No separate "regular vs. custom" mode flag needed — one data
+          structure, two different edit gestures on it.
+      - **Configurable vertex/side count**, decided 2026-08-30: a "Sides"
+        dropdown in `shapePropertiesGroup` when a polygon/star is selected,
+        sensible presets (3, 4, 5, 6, 7, 8, 10, 12) rather than a free numeric
+        input. Changing it is a third trigger for the same "regenerate all
+        points from formula" path used by corner-resize — topology genuinely
+        changes when side count changes, so any custom-dragged vertices are
+        reset, consistent with how corner-resize already behaves. For star
+        specifically, likely also want an inner-radius-ratio control (how
+        deep the notches cut) as a second dropdown with presets (e.g.
+        30/40/50/60%) rather than a slider — same reasoning as the font-size
+        control. Treat as part of the same design/implementation pass, since
+        it's a third caller of the same regeneration logic, not new work.
       - Rotation (e.g. spinning a star to a different point angle) is a
         separate future concern from resize — would be an optional additional
         handle layered on top of whichever resize model applies, not a change
@@ -229,6 +258,27 @@ items below are resolved *in design*, not yet confirmed working.
   avoids build-step/bundler complexity while still allowing a clean file split.
 - Sliders are a poor fit for controls needing precise, specific values (font
   size); a dropdown of sensible presets is easier to use accurately.
+- **Classic-script forward references are only safe inside function bodies
+  that run later — not in top-level statements that execute immediately at
+  script load.** Found via two real bugs during testing: `propInputs` was
+  referenced at the top level of `text-formatting.js` (an immediate
+  `.addEventListener(...)` call) before it was declared in `main.js`, which
+  loads after; `printBtn` had the identical issue in `print.js`. Both fixed
+  by moving the declaration into the file that needs it at top level, rather
+  than relying on another file's declaration. Rule going forward: any bare
+  `document.getElementById(...).addEventListener(...)` at the top level of a
+  file needs its element declared earlier *in that same file* — cross-file
+  references are only safe when they're resolved inside a function body
+  invoked later (e.g. a click handler's callback), not in the registration
+  call itself.
+- Quill's default `font` format is class-based with a small built-in
+  whitelist (`serif`/`monospace` only) and silently no-ops on anything else —
+  no error, just no visible effect. Caught during testing (font-family
+  dropdown appeared to do nothing). Fixed by registering the style-based
+  `attributors/style/font` attributor instead (same approach already used for
+  `size`), which applies the value as inline `font-family` CSS directly. Any
+  future Quill format that needs to accept values outside its tiny default
+  whitelist will likely need the same style-attributor swap.
 
 ## Tools & Resources
 - **Quill** (rich text editor, sidebar-only, headless toolbar wired to existing

@@ -190,6 +190,8 @@ function compileToPrintSheet(jsonLayoutState) {
 </html>`;
 }
 
+const printBtn = document.getElementById('printBtn');
+
 printBtn.addEventListener('click', () => {
   const html = compileToPrintSheet(state);
 

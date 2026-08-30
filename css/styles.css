@@ -212,11 +212,23 @@ textarea.form-control { resize: vertical; min-height: 80px; font-family: monospa
   overflow-y: auto;
   line-height: 1.5;
 }
-#quillEditorContainer .ql-editor:focus,
-#quillEditorContainer.ql-container.ql-focused {
+#quillEditorContainer .ql-editor:focus {
   outline: none;
+}
+
+/* Toggled via JS (text-formatting.js) based on Quill's actual focus state —
+   Quill does not add a focus-state class automatically, so this can't rely
+   on Quill's own CSS/markup alone. */
+#quillEditorContainer.quill-editing-active {
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.quill-edit-hint {
+  font-size: 11px;
+  color: var(--label-color);
+  margin-top: 6px;
+  line-height: 1.4;
 }
 
 /* --- UI Components: Sliders & Colors --- */
