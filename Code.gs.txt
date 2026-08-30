@@ -1,0 +1,210 @@
+/**
+ * Serves the core interface code structure onto the modal frame window execution layer
+ */
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Business Card Creator')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Temporary chunk streaming vault catching segmented data bytes safely below the Cache Service limits
+ */
+function registerPrintCacheSegment(cacheKey, chunkIndex, totalChunks, chunkData) {
+  const transactionalCache = CacheService.getUserCache();
+  
+  // Store individual chunk segments with a structured index pointer identifier
+  transactionalCache.put(cacheKey + '_chunk_' + chunkIndex, chunkData, 600);
+  
+  // If this is the final block, record the master total for reconstruction mapping
+  if (Number(chunkIndex) === Number(totalChunks) - 1) {
+    transactionalCache.put(cacheKey + '_total', String(totalChunks), 600);
+  }
+  return true;
+}
+
+/**
+ * Re-assembles text properties and generates print documents natively
+ */
+function compileImposedPdfFromPayload(coreStatePayload) {
+  try {
+    const transactionalCache = CacheService.getUserCache();
+
+    // Reconstruct matching image elements by pulling references from memory cache loops
+    coreStatePayload.elements.forEach(el => {
+      if (el.type === 'image' && el.src && el.src.startsWith('img_cache_')) {
+        const totalChunksStr = transactionalCache.get(el.src + '_total');
+        if (totalChunksStr) {
+          const totalChunks = parseInt(totalChunksStr, 10);
+          let fullAssembledString = '';
+          
+          // Loop through and stitch the data packets back into a unified file string
+          for (let i = 0; i < totalChunks; i++) {
+            const chunkPiece = transactionalCache.get(el.src + '_chunk_' + i);
+            if (chunkPiece) fullAssembledString += chunkPiece;
+          }
+          
+          if (fullAssembledString !== '') el.src = fullAssembledString;
+        }
+      }
+    });
+
+    // 1. Leverage the server layer engine to execute the absolute A4 HTML blueprint transpile
+    const fullHtmlMarkup = serverSideCompileToPrintSheet(coreStatePayload);
+
+    // 2. Transpile the layout directly into a raw PDF binary blob format
+    const blobHtml = Utilities.newBlob(fullHtmlMarkup, 'text/html', 'print_sheet.html');
+    const pdfBlob = blobHtml.getAs('application/pdf');
+    pdfBlob.setName('Business_Card_Creator_Print_Ready_Sheet.pdf');
+    
+    // 3. Create the file asset securely within your Google Drive profile storage
+    const targetFile = DriveApp.createFile(pdfBlob);
+    targetFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return targetFile.getDownloadUrl() || targetFile.getUrl();
+  } catch (error) {
+    throw new Error("Server-side transaction failure: " + error.toString());
+  }
+}
+
+/**
+ * Server-Side mirror translation matching your working frontend A4 Imposition configurations
+ */
+// function serverSideCompileToPrintSheet(jsonLayoutState) {
+//   const pxToMmFactor = 85 / 321; 
+//   let cardInnerHtml = '';
+  
+//   const sortedElements = [...jsonLayoutState.elements].sort((a, b) => a.zIndex - b.zIndex);
+  
+//   sortedElements.forEach(el => {
+//     const leftMm = (el.x * pxToMmFactor).toFixed(4);
+//     const topMm = (el.y * pxToMmFactor).toFixed(4);
+//     const widthMm = (el.width * pxToMmFactor).toFixed(4);
+//     const heightMm = (el.height * pxToMmFactor).toFixed(4);
+
+//     if (el.type === 'text') {
+//       const s = el.style || {};
+//       cardInnerHtml += '<div style="position:absolute; left:' + leftMm + 'mm; top:' + topMm + 'mm; width:' + widthMm + 'mm; height:' + heightMm + 'mm; font-family:' + (s.fontFamily || 'Arial, sans-serif') + '; font-size:' + (s.fontSize || '14px') + '; font-weight:' + (s.fontWeight || 'normal') + '; font-style:' + (s.fontStyle || 'normal') + '; text-decoration:' + (s.textDecoration || 'none') + '; color:' + (s.color || '#333333') + '; text-align:' + (s.textAlign || 'left') + '; line-height:' + (s.lineHeight || '1.2') + '; white-space:pre-wrap; word-wrap:break-word; overflow:hidden;">' + el.content + '</div>';
+//     } else if (el.type === 'image') {
+//       const src = el.src && el.src.trim() !== '' ? el.src : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+//       cardInnerHtml += '<img src="' + src + '" style="position:absolute; left:' + leftMm + 'mm; top:' + topMm + 'mm; width:' + widthMm + 'mm; height:' + heightMm + 'mm; object-fit:fill;" />';
+//     }
+//   });
+
+//   // Locate this background configuration section inside your print functions:
+//   let cardBackgroundCss = 'background: #ffffff;';
+//   let overlayHtml = '';
+  
+//   if (jsonLayoutState.background) {
+//     const bg = jsonLayoutState.background;
+//     const fadeOpacity = (bg.fade || 0) / 100;
+    
+//     // Inject a matching printed overlay layer configuration right behind the card components matrix
+//     overlayHtml = `<div style="position: absolute; top:0; left:0; width:100%; height:100%; background:#ffffff; opacity:${fadeOpacity}; z-index:0; pointer-events:none;"></div>`;
+    
+//     cardBackgroundCss = bg.type === 'image' ? `background: ${bg.value}; background-size: cover; background-position: center;` : `background: ${bg.value};`;
+//   }
+
+//   // Update your cards HTML generation wrapper loop to inject that overlay html structure:
+//   let cardsHtml = '';
+//   for (let row = 0; row < 5; row++) {
+//     for (let col = 0; col < 2; col++) {
+//       cardsHtml += `
+//         <div style="position: absolute; left: ${col * 85}mm; top: ${row * 55}mm; width: 85mm; height: 55mm; overflow: hidden; ${cardBackgroundCss}">
+//           ${overlayHtml} <!-- Added Overlay html to preserve backgrounds fade on paper -->
+//           ${cardInnerHtml}
+//         </div>`;
+//     }
+//   }
+
+
+//   // FIXED: Restored metric position arrays for guidelines
+//   let cropMarksHtml = '';
+//   [0, 85, 170].forEach(x => { cropMarksHtml += '<div class="crop-mark-v" style="left:' + x + 'mm;"></div>'; });
+//   [0, 55, 110, 165, 220, 275].forEach(y => { cropMarksHtml += '<div class="crop-mark-h" style="top:' + y + 'mm;"></div>'; });
+
+//   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+//   <link rel="stylesheet" href="https://googleapis.com">
+//   <style>@page{size:A4;margin:0;}*{box-sizing:border-box;margin:0;padding:0;}body{background:#ffffff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}.sheet{width:210mm;height:297mm;position:relative;page-break-inside:avoid;padding-top:11mm;padding-left:20mm;}.grid{width:170mm;height:275mm;position:relative;}.crop-mark-v{position:absolute;width:0;border-left:0.5pt dashed #999999;top:-5mm;bottom:-5mm;z-index:9999;}.crop-mark-h{position:absolute;height:0;border-top:0.5pt dashed #999999;left:-5mm;right:-5mm;z-index:9999;}</style></head><body><div class="sheet"><div class="grid">' + cropMarksHtml + cardsHtml + '</div></div></body></html>`;
+// }
+
+function serverSideCompileToPrintSheet(jsonLayoutState) {
+  const pxToMmFactor = 85 / 321; 
+  let cardInnerHtml = '';
+  
+  const sortedElements = [...jsonLayoutState.elements].sort((a, b) => a.zIndex - b.zIndex);
+  
+  sortedElements.forEach(el => {
+    const leftMm = (el.x * pxToMmFactor).toFixed(4);
+    const topMm = (el.y * pxToMmFactor).toFixed(4);
+    const widthMm = (el.width * pxToMmFactor).toFixed(4);
+    const heightMm = (el.height * pxToMmFactor).toFixed(4);
+
+    if (el.type === 'text') {
+      const s = el.style || {};
+      cardInnerHtml += '<div style="position:absolute; left:' + leftMm + 'mm; top:' + topMm + 'mm; width:' + widthMm + 'mm; height:' + heightMm + 'mm; font-family:' + (s.fontFamily || 'Arial, sans-serif') + '; font-size:' + (s.fontSize || '14px') + '; font-weight:' + (s.fontWeight || 'normal') + '; font-style:' + (s.fontStyle || 'normal') + '; text-decoration:' + (s.textDecoration || 'none') + '; color:' + (s.color || '#333333') + '; text-align:' + (s.textAlign || 'left') + '; line-height:' + (s.lineHeight || '1.2') + '; white-space:pre-wrap; word-wrap:break-word; overflow:hidden;">' + el.content + '</div>';
+    } else if (el.type === 'image') {
+      const src = el.src && el.src.trim() !== '' ? el.src : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+      cardInnerHtml += '<img src="' + src + '" style="position:absolute; left:' + leftMm + 'mm; top:' + topMm + 'mm; width:' + widthMm + 'mm; height:' + heightMm + 'mm; object-fit:fill;" />';
+    }
+  });
+
+  let cardBackgroundCss = 'background: #ffffff;';
+  let overlayHtml = '';
+  
+  if (jsonLayoutState.background) {
+    const bg = jsonLayoutState.background;
+    const fadeOpacity = (bg.fade || 0) / 100;
+    
+    overlayHtml = `<div style="position: absolute; top:0; left:0; width:100%; height:100%; background:#ffffff; opacity:${fadeOpacity}; z-index:0; pointer-events:none;"></div>`;
+    
+    cardBackgroundCss = bg.type === 'image' ? `background: ${bg.value}; background-size: cover; background-position: center;` : `background: ${bg.value};`;
+  }
+
+  let cardsHtml = '';
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 2; col++) {
+      cardsHtml += `
+        <div style="position: absolute; left: ${col * 85}mm; top: ${row * 55}mm; width: 85mm; height: 55mm; overflow: hidden; ${cardBackgroundCss}">
+          ${overlayHtml}
+          ${cardInnerHtml}
+        </div>`;
+    }
+  }
+
+  let cropMarksHtml = '';
+  [0, 85, 170].forEach(x => { cropMarksHtml += '<div class="crop-mark-v" style="left:' + x + 'mm;"></div>'; });
+  [0, 55, 110, 165, 220, 275].forEach(y => { cropMarksHtml += '<div class="crop-mark-h" style="top:' + y + 'mm;"></div>'; });
+
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{size:A4;margin:0;}*{box-sizing:border-box;margin:0;padding:0;}body{background:#ffffff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}.sheet{width:210mm;height:297mm;position:relative;page-break-inside:avoid;padding-top:11mm;padding-left:20mm;}.grid{width:170mm;height:275mm;position:relative;}.crop-mark-v{position:absolute;width:0;border-left:0.5pt dashed #999999;top:-5mm;bottom:-5mm;z-index:9999;}.crop-mark-h{position:absolute;height:0;border-top:0.5pt dashed #999999;left:-5mm;right:-5mm;z-index:9999;}</style></head><body><div class="sheet"><div class="grid">' + cropMarksHtml + cardsHtml + '</div></div></body></html>';
+}
+  
+  // FIXED: Removed invalid stylesheet link and corrected template literal variables
+//   return `<!DOCTYPE html>
+// <html>
+// <head>
+//   <meta charset="UTF-8">
+//     <link rel="preconnect" href="https://fonts.googleapis.com">
+//   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+//   <link href="https://googleapis.com" rel="stylesheet">
+//   <style>
+//     @page { size: A4; margin: 0; }
+//     * { box-sizing: border-box; margin: 0; padding: 0; }
+//     body { background: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+//     .sheet { width: 210mm; height: 297mm; position: relative; page-break-inside: avoid; padding-top: 11mm; padding-left: 20mm; }
+//     .grid { width: 170mm; height: 275mm; position: relative; }
+//     .crop-mark-v { position: absolute; width: 0; border-left: 0.5pt dashed #999999; top: -5mm; bottom: -5mm; z-index: 9999; }
+//     .crop-mark-h { position: absolute; height: 0; border-top: 0.5pt dashed #999999; left: -5mm; right: -5mm; z-index: 9999; }
+//   </style>
+// </head>
+// <body>
+//   <div class="sheet">
+//     <div class="grid">
+//       ${cropMarksHtml}
+//       ${cardsHtml}
+//     </div>
+//   </div>
+// </body>
+// </html>`;
+// }
+

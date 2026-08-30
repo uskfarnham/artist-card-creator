@@ -1,0 +1,2392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Card Creator</title>
+  <style>
+    /* --- CSS Reset & Base Variables --- */
+    :root {
+      --card-width: 85mm;
+      --card-height: 55mm;
+      --safe-margin: 3mm;
+      
+      --bg-color: #f3f4f6;
+      --panel-bg: #ffffff;
+      --border-color: #e5e7eb;
+      --accent-color: #2563eb;
+      --text-color: #1f2937;
+      --label-color: #6b7280;
+      --guide-color: #ec4899;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* --- Master Reset Loop Override --- */
+    html, body, .app-container {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important; /* Locks screen framework perfectly */
+    }
+
+    /* --- The Layout Core Fix --- */
+    .main-body { 
+      display: flex !important; 
+      flex-direction: row !important;
+      width: 100vw !important;
+      height: calc(100vh - 64px) !important; /* Clamps columns right below your topbar */
+      max-height: calc(100vh - 64px) !important;
+      overflow: hidden !important; 
+    }
+
+        /* --- Layout: Left Toolbar Column (Clean Framework Reset) --- */
+    /* --- Layout: Left Toolbar Column (Enforced Stack) --- */
+    .left-toolbar {
+      width: 260px !important; 
+      min-width: 260px !important;
+      max-width: 260px !important;
+      height: 100% !important;
+      background: var(--panel-bg); 
+      border-right: 1px solid var(--border-color);
+      padding: 0 !important; 
+      display: flex !important; 
+      flex-direction: column !important; /* Forces internal items to calculate height on a true flex axis */
+      z-index: 10; 
+      flex-shrink: 0 !important;
+      overflow: hidden !important; 
+    }
+
+    /* --- Left Sidebar Inner Scrolling Vault (Enforced Column Flow) --- */
+    .left-toolbar .sidebar-scroll-box { 
+      padding: 16px !important;
+      display: flex !important;
+      flex-direction: column !important; /* Stack accordions vertically inside the scroll track */
+      justify-content: flex-start !important;
+      align-items: stretch !important;
+    }
+
+    /* --- Layout: Right Panel Column (Clean Framework Reset) --- */
+    .right-panel {
+      width: 320px !important; 
+      min-width: 320px !important;
+      max-width: 320px !important;
+      height: 100% !important;
+      background: var(--panel-bg); 
+      border-left: 1px solid var(--border-color);
+      padding: 0 !important; /* CRITICAL FIX: Strip outer padding so the inner box can measure height perfectly */
+      display: flex !important; 
+      flex-direction: column !important; 
+      z-index: 10; 
+      flex-shrink: 0 !important;
+      overflow: hidden !important; 
+    }
+
+    /* --- Bulletproof Inner Scrolling Vault (Padding Restored Internally) --- */
+    .sidebar-scroll-box {
+      flex: 1 1 0% !important; /* Forces the box to occupy all remaining vertical space dynamically */
+      min-height: 0 !important; /* CRITICAL FIX: Unlocks the flex container so the box can shrink and scroll */
+      width: 100% !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important; /* Reactivates pristine scroll tracks */
+    }
+
+    /* Move padding inside the scroll tracking layer so your buttons maintain their spacing */
+    .left-toolbar .sidebar-scroll-box { padding: 16px !important; }
+    .right-panel .sidebar-scroll-box { padding: 24px !important; }
+
+
+    /* --- Center Workspace Canvas Area --- */
+    .workspace {
+      flex: 1 !important; 
+      display: flex !important; 
+      align-items: center !important; 
+      justify-content: center !important; 
+      position: relative !important;
+      padding: 40px !important; 
+      background-color: #e5e5f7;
+      background-image: radial-gradient(#c7c7d4 1px, transparent 1px); 
+      background-size: 20px 20px;
+      height: 100% !important;
+      max-height: 100% !important;
+      min-width: 0 !important;
+      overflow: auto !important; /* Keeps internal canvas scrolls happy */
+    }
+
+
+    /* --- Layout: Topbar --- */
+    .topbar {
+      height: 64px; 
+      min-height: 64px; /* Blocks layout columns from squeezing the header thin */
+      background: var(--panel-bg); 
+      border-bottom: 1px solid var(--border-color);
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      padding: 0 24px;
+      z-index: 20; 
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+      flex-shrink: 0; /* Guarantees the top bar maintains structural shape */
+    }
+
+
+    /* --- Global Cursor Overrides for Smooth Dragging --- */
+    body.is-dragging * { cursor: move !important; }
+    body.is-resizing-nwse * { cursor: nwse-resize !important; }
+    body.is-resizing-nesw * { cursor: nesw-resize !important; }
+
+    
+    .brand-title { font-size: 1.1rem; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 12px; letter-spacing: -0.02em; }
+    .brand-subtitle { font-size: 0.75rem; font-weight: 500; color: var(--label-color); background: #f3f4f6; padding: 4px 8px; border-radius: 6px; letter-spacing: 0; }
+    .topbar-actions { display: flex; gap: 8px; align-items: center; }
+
+    
+    /* --- Layout: Card Canvas Box (Anti-Distortion Scale Framework) --- */
+    .canvas-container {
+      width: 321px !important;   /* Locks standard pixel width baseline matching our mm ratio */
+      height: 208px !important;  /* Locks standard pixel height baseline matching our mm ratio */
+      min-width: 321px !important;  /* Blocks flexbox from squishing width into odd shapes */
+      min-height: 208px !important; /* Blocks flexbox from squishing height into odd shapes */
+      background: #ffffff; 
+      position: relative;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05); 
+      overflow: hidden; 
+      display: block;
+      flex-shrink: 0; /* Tells the parent container layout: "Never compress this box" */
+      will-change: transform;
+      transition: transform 0.05s linear;
+    }
+    .safe-zone {
+      position: absolute; top: var(--safe-margin); left: var(--safe-margin);
+      right: var(--safe-margin); bottom: var(--safe-margin);
+      border: 1.5px dotted #ff4757; opacity: 0.6; pointer-events: none; z-index: 9998;
+    }
+
+    /* --- UI Components: Buttons --- */
+    .btn {
+      background: var(--accent-color); color: white; border: none; padding: 10px 16px;
+      font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer;
+      transition: all 0.15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+    }
+    .btn:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(37,99,235,0.2); }
+    .btn:active { transform: translateY(0); box-shadow: none; }
+    .btn.secondary { background: #ffffff; color: #374151; border: 1px solid #d1d5db; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .btn.secondary:hover { background: #f9fafb; border-color: #9ca3af; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
+    .btn.danger { background: #ffffff; color: #ef4444; border: 1px solid #fca5a5; }
+    .btn.danger:hover { background: #fef2f2; border-color: #ef4444; box-shadow: 0 4px 6px rgba(239,68,68,0.1); }
+
+    /* --- UI Components: Typography Toolbar Row --- */
+    .toolbar-row {
+      display: flex; border: 1px solid var(--border-color); border-radius: 6px;
+      overflow: hidden; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .toolbar-btn {
+      flex: 1; background: #fff; border: none; border-right: 1px solid var(--border-color);
+      padding: 8px 0; cursor: pointer; font-size: 14px; color: #4b5563; transition: all 0.1s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .toolbar-btn:last-child { border-right: none; }
+    .toolbar-btn:hover { background: #f3f4f6; color: #111827; }
+    .toolbar-btn.active { background: #eff6ff; color: var(--accent-color); font-weight: bold; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+
+    /* --- UI Components: Forms & Typography --- */
+    h2 { font-size: 0.75rem; text-transform: uppercase; color: var(--label-color); margin-bottom: 16px; letter-spacing: 0.05em; font-weight: 700; }
+    hr { border: none; border-top: 1px solid var(--border-color); margin: 24px 0; }
+    
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--label-color); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-control {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px;
+      font-size: 13px; font-family: inherit; color: var(--text-color); transition: border-color 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .form-control:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    
+    .rich-editor {
+      min-height: 80px; max-height: 200px; overflow-y: auto; background: #fff; white-space: pre-wrap; word-wrap: break-word;
+      padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; line-height: 1.5;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: border-color 0.15s;
+    }
+    .rich-editor:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    textarea.form-control { resize: vertical; min-height: 80px; font-family: monospace; font-size: 12px; }
+
+    /* --- UI Components: Sliders & Colors --- */
+    input[type="range"] { -webkit-appearance: none; width: 100%; background: transparent; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-color); cursor: pointer; margin-top: -6px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #e5e7eb; border-radius: 2px; }
+    input[type="range"]:focus { outline: none; }
+
+    .color-swatches { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .swatch:hover { transform: scale(1.15); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .color-custom-row { display: flex; align-items: center; gap: 12px; background: #f9fafb; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); }
+    input[type="color"].form-control { padding: 0; height: 32px; width: 48px; cursor: pointer; border: none; border-radius: 4px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+    /* --- UI Components: Tooltips --- */
+    .tooltip-container { position: relative; display: inline-flex; align-items: center; cursor: help; }
+    .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; background: #e5e7eb; color: #6b7280; border-radius: 50%; font-size: 10px; font-weight: bold; margin-left: 6px; font-family: monospace; }
+    .tooltip-text { visibility: hidden; width: 220px; background-color: #1f2937; color: #fff; text-align: center; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1000; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.2s; font-size: 11px; font-weight: normal; line-height: 1.4; pointer-events: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+    .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+    /* --- Smart Guides --- */
+    #smart-guides-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 9999; }
+    .smart-guide { position: absolute; background-color: var(--guide-color); box-shadow: 0 0 2px rgba(255,0,255,0.5); }
+    .smart-guide.vertical { width: 1px; top: 0; bottom: 0; }
+    .smart-guide.horizontal { height: 1px; left: 0; right: 0; }
+
+    /* --- Draggable Elements & Handles --- */
+    .design-element { position: absolute; cursor: move; user-select: none; border: 1.5px solid transparent; }
+    .design-element.selected { border: 1.5px dashed var(--accent-color); }
+    .element-content { width: 100%; height: 100%; outline: none; overflow: hidden; display: block; white-space: pre-wrap; word-wrap: break-word; }
+    img.element-content { object-fit: fill; pointer-events: none; }
+    .element-content[contenteditable="true"] { cursor: text; user-select: text; border: 1px dashed var(--accent-color); background: rgba(0, 86, 255, 0.02); }
+    .element-content[contenteditable="true"]:focus { outline: 2px solid var(--accent-color); background: #ffffff; }
+    .resize-handle { position: absolute; width: 10px; height: 10px; background: #ffffff; border: 2px solid var(--accent-color); border-radius: 50%; display: none; z-index: 11; }
+    .design-element.single-selected .resize-handle { display: block; }
+    .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+    .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+    .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+    .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+    /* --- Accordion Functional Sidebar Components --- */
+    .accordion-item {
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      background: #ffffff;
+      /* Crucial scrollbar alignment properties */
+      flex-shrink: 0 !important; 
+      width: 100% !important;
+    }
+
+
+    .accordion-trigger {
+      width: 100%;
+      padding: 12px;
+      background: #f9fafb;
+      border: none;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-color);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.15s;
+    }
+    .accordion-trigger:hover { background: #f3f4f6; }
+    .accordion-trigger span { font-size: 10px; color: var(--label-color); transition: transform 0.2s; }
+    
+    .accordion-content {
+      padding: 16px;
+      display: none; /* Collapsed state baseline setting */
+      border-top: 1px solid var(--border-color);
+    }
+    
+    /* Toggle Execution Classes */
+    .accordion-item.active .accordion-content { display: block; }
+    .accordion-item.active .accordion-trigger span { transform: rotate(180deg); }
+
+    /* Give internal panel elements flexible layout sizing */
+    #textPropertiesGroup, 
+    #imagePropertiesGroup, 
+    #layerPropertiesGroup, 
+    #alignmentPropertiesGroup {
+      flex-shrink: 0;
+      width: 100%;
+    }
+
+    /* --- Canvas Background Overlay Element --- */
+    .canvas-bg-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #ffffff; /* Fades out to pure white. Change this color to change the fade base. */
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0; /* Default completely clear */
+      transition: opacity 0.1s linear;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="brand-title">
+        Business Card Creator
+        <span class="brand-subtitle">Standard UK/EU Business Card Designer (85x55mm)</span>
+      </div>
+      <div class="topbar-actions">
+        <button type="button" class="btn secondary" id="undoBtn" title="Undo (Ctrl+Z)" style="width: auto;">↶ Undo</button>
+        <button type="button" class="btn secondary" id="redoBtn" title="Redo (Ctrl+Y)" style="width: auto;">↷ Redo</button>
+        <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 8px;"></div>
+        <button type="button" class="btn secondary" id="loadBtn" style="width: auto;">📂 Load</button>
+        <button type="button" class="btn secondary" id="saveBtn" style="width: auto;">💾 Save As...</button>
+        <button type="button" class="btn" id="printBtn" style="width: auto;">🖨️ Print A4</button>
+        <input type="file" id="loadJsonInput" accept=".json" style="display: none;">
+      </div>
+    </header>
+
+    <div class="main-body">
+      <!-- LEFT TOOLBAR (Accordion Optimized Framework) -->
+      <aside class="left-toolbar" style="padding: 16px;">
+        <div class="sidebar-scroll-box"> 
+          <!--div class="brand-title" style="font-size: 1.2rem; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+            Business Card Creator
+          </div-->
+
+          <!-- Accordion Folder 1: Add Components -->
+          <div class="accordion-item active">
+            <button type="button" class="accordion-trigger">➕ Add Elements <span>▼</span></button>
+            <div class="accordion-content">
+              <button type="button" class="btn secondary" id="addTextBtn" style="justify-content: flex-start; margin-bottom: 10px;">+ Add Text Block</button>
+              <button type="button" class="btn secondary" id="addImageBtn" style="justify-content: flex-start; margin-bottom: 12px;">+ Add Image</button>
+              <input type="file" id="imageUploadInput" accept="image/png, image/jpeg" style="display: none;">
+            </div>
+          </div>
+
+          <!-- Accordion Folder 2: Workspace Management -->
+          <div class="accordion-item active">
+            <button type="button" class="accordion-trigger">⚙️ Canvas Settings <span>▼</span></button>
+            <div class="accordion-content">
+              <!-- Canvas Workspace Zoom Slider Component -->
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  Workspace Zoom 
+                  <span id="zoomDisplay" style="color: var(--accent-color); font-size: 12px; background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: bold;">100%</span>
+                </label>
+                <input type="range" id="canvasZoomSlider" min="50" max="200" value="100" step="10">
+              </div>
+
+              <label class="tooltip-container" style="font-size: 13px; cursor: pointer; display: flex; align-items: center; margin-bottom: 12px; color: var(--text-color); font-weight: 500;">
+                <input type="checkbox" id="gridSnapToggle" checked style="margin-right: 8px; width: 16px; height: 16px; accent-color: var(--accent-color);">
+                Grid Snapping
+                <span class="info-icon">i</span>
+                <span class="tooltip-text">Snaps elements to a 5mm grid when moving or resizing.</span>
+              </label>
+              
+              <div class="tooltip-container" style="font-size: 13px; display: flex; align-items: center; margin-bottom: 12px; color: var(--text-color); font-weight: 500; cursor: help;">
+                Safe Zone Guide <span class="info-icon">i</span>
+                <span class="tooltip-text">Keep text inside the dotted red border to guarantee it isn't clipped during physical printing truncation.</span>
+              </div>
+              
+              <div class="tooltip-container" style="font-size: 13px; display: flex; align-items: center; color: var(--text-color); font-weight: 500; cursor: help;">
+                Aspect Ratio Lock <span class="info-icon">i</span>
+                <span class="tooltip-text">Images automatically lock their proportions when resized to prevent distortion.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Accordion Folder 3: Card Background Settings -->
+          <div class="accordion-item">
+            <button type="button" class="accordion-trigger">🎨 Card Background <span>▼</span></button>
+              <div class="accordion-content">
+                <div class="form-group">
+                  <label>Background Type</label>
+                  <select id="bgTypeSelect" class="form-control">
+                    <option value="color">Solid Color</option>
+                    <option value="gradient">Gradient Pre-sets</option>
+                    <option value="custom-gradient">✨ Custom Gradient</option> <!-- Added Custom Option -->
+                    <option value="image">Custom Image</option>
+                  </select>
+                </div>
+
+                <!-- Block 1: Solid Color Fill -->
+                <div id="bgSolidGroup" class="form-group">
+                  <label>Fill Color</label>
+                  <input type="color" id="canvasBgColorPicker" class="form-control" value="#ffffff" style="height: 38px; padding: 2px; cursor: pointer; display: block; width: 100%;">
+                </div>
+
+                <!-- Block 2: Pre-set Gradients Dropdown -->
+                <div id="bgGradientGroup" class="form-group" style="display: none;">
+                  <label>Gradient Theme</label>
+                  <select id="bgGradientPreset" class="form-control">
+                    <option value="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">Royal Purple</option>
+                    <option value="linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)">Soft Blush</option>
+                    <option value="linear-gradient(135deg, #13547a 0%, #80d0c7 100%)">Deep Aqua</option>
+                    <option value="linear-gradient(135deg, #243b55 0%, #141e30 100%)">Midnight Slate</option>
+                  </select>
+                </div>
+
+                <!-- Block 3: Dynamic Custom Gradient Builder Core Controllers -->
+                <div id="bgCustomGradientGroup" class="form-group" style="display: none; background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 16px;">
+                  <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                    <div style="flex: 1;">
+                      <label style="font-size: 10px; margin-bottom: 4px;">Color 1</label>
+                      <input type="color" id="gradientColor1" class="form-control" value="#2563eb" style="height: 34px; padding: 2px; cursor: pointer;">
+                    </div>
+                    <div style="flex: 1;">
+                      <label style="font-size: 10px; margin-bottom: 4px;">Color 2</label>
+                      <input type="color" id="gradientColor2" class="form-control" value="#ec4899" style="height: 34px; padding: 2px; cursor: pointer;">
+                    </div>
+                  </div>
+                  <div>
+                    <label style="font-size: 10px; display: flex; justify-content: space-between;">Angle <span id="gradientAngleDisplay" style="color: var(--accent-color); font-weight: bold;">135°</span></label>
+                    <input type="range" id="gradientAngleSlider" min="0" max="360" value="135" step="15" style="margin-top: 4px;">
+                  </div>
+                </div>
+
+                <!-- Block 4: Upload Backdrop Image -->
+                <div id="bgImageGroup" class="form-group" style="display: none;">
+                  <label>Upload Backdrop Image</label>
+                  <button type="button" class="btn secondary" id="btnUploadBgImage" style="font-size: 12px; padding: 8px;">📁 Choose Image...</button>
+                  <input type="file" id="bgImageFileInput" accept="image/png, image/jpeg" style="display: none;">
+                </div>
+
+                <!-- Background Fade Controller Slider -->
+                <div class="form-group" style="margin-top: 16px;">
+                  <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    Background Fade 
+                    <span id="bgFadeDisplay" style="color: var(--accent-color); font-size: 12px; background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: bold;">0%</span>
+                  </label>
+                  <input type="range" id="canvasBgFadeSlider" min="0" max="100" value="0" step="5">
+                </div>
+              </div>
+          </div>
+        </div>
+      </aside>
+
+
+      <!-- WORKSPACE -->
+      <main class="workspace" id="workspace">
+        <div class="canvas-container" id="canvas">
+          <div class="safe-zone"></div>
+          <div id="smart-guides-container"></div>
+        </div>
+      </main>
+
+      <!-- RIGHT PANEL (Now permanently anchored inside viewport grid rules) -->
+      <aside class="right-panel" id="propertiesPanel">
+        <div class="sidebar-scroll-box"> 
+          <!-- ALIGNMENT PROPERTIES -->
+          <div id="alignmentPropertiesGroup" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h2 style="margin:0;">Align Multiple</h2>
+              <button type="button" class="btn secondary" id="btnGroupToggle" style="padding: 4px 10px; font-size: 11px; width: auto; margin: 0;">Group</button>
+            </div>
+            <div class="toolbar-row">
+              <button type="button" class="toolbar-btn" id="btnAlignLeft" title="Align Left">⫷</button>
+              <button type="button" class="toolbar-btn" id="btnAlignCenter" title="Align Center">≡</button>
+              <button type="button" class="toolbar-btn" id="btnAlignRight" title="Align Right">⫸</button>
+            </div>
+            <div class="toolbar-row">
+              <button type="button" class="toolbar-btn" id="btnAlignTop" title="Align Top">⇡</button>
+              <button type="button" class="toolbar-btn" id="btnAlignMiddle" title="Align Middle">⇕</button>
+              <button type="button" class="toolbar-btn" id="btnAlignBottom" title="Align Bottom">⇣</button>
+            </div>
+            <hr>
+          </div>
+
+          <!-- LAYER PROPERTIES -->
+          <div id="layerPropertiesGroup" style="display: none;">
+            <h2>Layer Depth</h2>
+            <div class="toolbar-row">
+              <button type="button" class="toolbar-btn" id="btnFront" title="Bring to Front">⇈</button>
+              <button type="button" class="toolbar-btn" id="btnForward" title="Bring Forward">↑</button>
+              <button type="button" class="toolbar-btn" id="btnBackward" title="Send Backward">↓</button>
+              <button type="button" class="toolbar-btn" id="btnBack" title="Send to Back">⇊</button>
+            </div>
+            <hr>
+          </div>
+
+          <!-- TEXT PROPERTIES -->
+          <div id="textPropertiesGroup" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h2 style="margin:0;">Text Properties</h2>
+              <button type="button" id="toggleHtmlBtn" class="btn secondary" style="padding: 4px 8px; font-size: 10px; width: auto; margin: 0;">View Raw HTML</button>
+            </div>
+            
+            <div class="form-group">
+              <div id="propContentRich" class="rich-editor" contenteditable="true"></div>
+              <textarea id="propContentRaw" class="form-control" style="display: none;"></textarea>
+            </div>
+
+            <!--div class="form-group">
+              <label>Font Family</label>
+              <select id="propFontFamily" class="form-control">
+                <!-- Sans-Serif Fonts (Modern & Clean) -->
+                <!--optgroup label="Sans-Serif (Modern)">
+                  <option value="'Inter', sans-serif">Inter</option>
+                  <option value="'Roboto', sans-serif">Roboto</option>
+                  <option value="'Montserrat', sans-serif">Montserrat</option>
+                  <option value="'Poppins', sans-serif">Poppins</option>
+                  <option value="Arial, sans-serif">Arial</option>
+                </optgroup>
+                <!-- Serif Fonts (Elegant & Classic) -->
+                <!--optgroup label="Serif (Elegant)">
+                  <option value="'Playfair Display', serif">Playfair Display</option>
+                  <option value="'Merriweather', serif">Merriweather</option>
+                  <option value="'Lora', serif">Lora</option>
+                  <option value="'Times New Roman', serif">Times New Roman</option>
+                </optgroup>
+                <!-- Display & Script Fonts (Artistic Accent) -->
+                <!--optgroup label="Display & Script">
+                  <option value="'Cinzel', serif">Cinzel (Luxury)</option>
+                  <option value="'Oswald', sans-serif">Oswald (Bold Cond.)</option>
+                  <option value="'Pacifico', cursive">Pacifico (Script)</option>
+                </optgroup>
+              </select>
+            </div-->
+
+
+            <div class="form-group">
+              <label>Font Family</label>
+              <select id="propFontFamily" class="form-control">
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="'Arial Black', Gadget, sans-serif">Arial Black</option>
+                <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans MS</option>
+                <option value="'Courier New', Courier, monospace">Courier New</option>
+                <option value="'Georgia', serif">Georgia</option>
+                <option value="Impact, Charcoal, sans-serif">Impact</option>
+                <option value="'Tahoma', Geneva, sans-serif">Tahoma</option>
+                <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                <option value="'Trebuchet MS', Helvetica, sans-serif">Trebuchet MS</option>
+                <option value="'Verdana', Geneva, sans-serif">Verdana</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Typography</label>
+              <div class="toolbar-row" style="margin-bottom: 0;">
+                <button type="button" class="toolbar-btn" id="btnBold" title="Bold"><b>B</b></button>
+                <button type="button" class="toolbar-btn" id="btnItalic" title="Italic"><i>I</i></button>
+                <button type="button" class="toolbar-btn" id="btnUnderline" title="Underline"><u>U</u></button> <!-- Added Underline Button -->
+                <button type="button" class="toolbar-btn" id="btnAlignLeftText" title="Align Left">⫷</button>
+                <button type="button" class="toolbar-btn" id="btnAlignCenterText" title="Align Center">≡</button>
+                <button type="button" class="toolbar-btn" id="btnAlignRightText" title="Align Right">⫸</button>
+              </div>
+            </div>
+
+
+            <div class="form-group">
+              <label style="display: flex; justify-content: space-between; align-items: center;">
+                Font Size 
+                <span id="fontSizeDisplay" style="color: var(--accent-color); font-size: 14px; background: #eff6ff; padding: 2px 8px; border-radius: 4px;">14px</span>
+              </label>
+              <input type="range" id="propFontSize" min="8" max="72" value="14">
+            </div>
+
+            <div class="form-group">
+              <label>Text Color</label>
+              <div class="color-swatches" id="paletteSwatches"></div>
+              <div class="color-custom-row">
+                <input type="color" id="propColor" class="form-control">
+                <span style="font-size: 12px; color: var(--text-color); font-weight: 500;">Custom Color</span>
+                <button type="button" id="saveColorBtn" class="btn secondary" style="padding: 6px 10px; font-size: 11px; width: auto; margin-left: auto; margin-bottom: 0;">+ Save</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- IMAGE PROPERTIES -->
+          <div id="imagePropertiesGroup" style="display: none;">
+            <h2>Image Properties</h2>
+            <div style="background: #f9fafb; padding: 16px; border-radius: 6px; border: 1px solid var(--border-color);">
+              <p style="font-size: 12px; color: var(--text-color); line-height: 1.6; margin: 0;">
+                <strong>Image selected.</strong><br><br>Drag the corner handles on the canvas to resize. The aspect ratio is mathematically locked to prevent distortion.
+              </p>
+            </div>
+          </div>
+          
+          <div style="margin-top: auto; padding-top: 24px;">
+            <button type="button" class="btn danger" id="deleteElementBtn" style="display: none;">Delete Selected</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * CORE DESIGN ENVIRONMENT - STEP 15 (UI Polish & Security Fixes)
+     */
+
+    // 1. State & History Management
+    const state = { 
+      elements: [], 
+      palette: ['#808080', '#0056ff', '#ff4757', '#2ed573', '#ffa502', '#000000'],
+      background: {
+        type: 'color',
+        value: '#ffffff',
+        fade: 0 // <--- Tracks background transparency opacity percentage (0 to 100)
+      }
+    };
+
+
+
+    let historyStack = [];
+    let historyIndex = -1;
+
+    function pushHistory() {
+      const clonedElements = JSON.parse(JSON.stringify(state.elements));
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push({ elements: clonedElements });
+      historyIndex++;
+    }
+
+    function loadHistory(index) {
+      if (index < 0 || index >= historyStack.length) return;
+      historyIndex = index;
+      const snapshot = historyStack[historyIndex];
+      
+      state.elements = JSON.parse(JSON.stringify(snapshot.elements));
+      
+      Array.from(canvas.children).forEach(child => {
+        if (child.id !== 'smart-guides-container' && !child.classList.contains('safe-zone')) {
+          child.remove();
+        }
+      });
+      
+      state.elements.forEach(el => renderElementToDOM(el));
+      syncSelectionToDOM();
+    }
+
+    // Rich Text Selection Tracking
+    let savedRange = null;
+    let activeEditor = null; 
+    let isEditingText = false;
+    let spawnOffset = 0;
+    let isRawMode = false;
+    let isNudging = false;
+
+    // DOM References
+    const canvas = document.getElementById('canvas');
+    const smartGuidesContainer = document.getElementById('smart-guides-container');
+    const gridSnapToggle = document.getElementById('gridSnapToggle');
+    
+    const addTextBtn = document.getElementById('addTextBtn');
+    const addImageBtn = document.getElementById('addImageBtn');
+    const imageUploadInput = document.getElementById('imageUploadInput');
+    
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const loadBtn = document.getElementById('loadBtn');
+    const printBtn = document.getElementById('printBtn');
+    const loadJsonInput = document.getElementById('loadJsonInput');
+    const deleteElementBtn = document.getElementById('deleteElementBtn');
+    
+    const propertiesPanel = document.getElementById('propertiesPanel');
+    const textPropertiesGroup = document.getElementById('textPropertiesGroup');
+    const imagePropertiesGroup = document.getElementById('imagePropertiesGroup');
+    const layerPropertiesGroup = document.getElementById('layerPropertiesGroup');
+    const alignmentPropertiesGroup = document.getElementById('alignmentPropertiesGroup');
+    const btnGroupToggle = document.getElementById('btnGroupToggle');
+    const paletteSwatches = document.getElementById('paletteSwatches');
+    const saveColorBtn = document.getElementById('saveColorBtn');
+    const toggleHtmlBtn = document.getElementById('toggleHtmlBtn');
+
+    const propInputs = {
+      contentRich: document.getElementById('propContentRich'),
+      contentRaw: document.getElementById('propContentRaw'),
+      fontFamily: document.getElementById('propFontFamily'),
+      fontSize: document.getElementById('propFontSize'),
+      color: document.getElementById('propColor')
+    };
+
+    // Left Sidebar Accordion Toggle Controller
+    document.querySelectorAll('.accordion-trigger').forEach(trigger => {
+      trigger.addEventListener('click', () => {
+        const item = trigger.closest('.accordion-item');
+        item.classList.toggle('active');
+      });
+    });
+
+
+    // Card Background Component Management
+        // Card Background Component Management (With Custom Gradient Builder)
+    const bgTypeSelect = document.getElementById('bgTypeSelect');
+    const bgSolidGroup = document.getElementById('bgSolidGroup');
+    const bgGradientGroup = document.getElementById('bgGradientGroup');
+    const bgCustomGradientGroup = document.getElementById('bgCustomGradientGroup'); // Added Reference
+    const bgImageGroup = document.getElementById('bgImageGroup');
+    
+    const canvasBgColorPicker = document.getElementById('canvasBgColorPicker');
+    const bgGradientPreset = document.getElementById('bgGradientPreset');
+    const btnUploadBgImage = document.getElementById('btnUploadBgImage');
+    const bgImageFileInput = document.getElementById('bgImageFileInput');
+    const canvasBgFadeSlider = document.getElementById('canvasBgFadeSlider');
+    const bgFadeDisplay = document.getElementById('bgFadeDisplay');
+
+    // New Custom Gradient Controllers
+    const gradientColor1 = document.getElementById('gradientColor1');
+    const gradientColor2 = document.getElementById('gradientColor2');
+    const gradientAngleSlider = document.getElementById('gradientAngleSlider');
+    const gradientAngleDisplay = document.getElementById('gradientAngleDisplay');
+
+    bgTypeSelect.addEventListener('change', (e) => {
+      const type = e.target.value;
+      state.background.type = type;
+      
+      bgSolidGroup.style.display = type === 'color' ? 'block' : 'none';
+      bgGradientGroup.style.display = type === 'gradient' ? 'block' : 'none';
+      bgCustomGradientGroup.style.display = type === 'custom-gradient' ? 'block' : 'none';
+      bgImageGroup.style.display = type === 'image' ? 'block' : 'none';
+      
+      if (type === 'color') updateCanvasBackground(canvasBgColorPicker.value);
+      if (type === 'gradient') updateCanvasBackground(bgGradientPreset.value);
+      if (type === 'custom-gradient') compileCustomGradientString();
+    });
+
+    canvasBgColorPicker.addEventListener('input', (e) => updateCanvasBackground(e.target.value));
+    bgGradientPreset.addEventListener('change', (e) => updateCanvasBackground(e.target.value));
+    btnUploadBgImage.addEventListener('click', () => bgImageFileInput.click());
+    
+    bgImageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => updateCanvasBackground(`url('${compressImageForCard(img, 1000, 0.85)}')`);
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Custom Gradient Builder Interactive Trackers
+    function compileCustomGradientString() {
+      const c1 = gradientColor1.value;
+      const c2 = gradientColor2.value;
+      const deg = gradientAngleSlider.value;
+      gradientAngleDisplay.textContent = `${deg}°`;
+      
+      const compiledGradient = `linear-gradient(${deg}deg, ${c1} 0%, ${c2} 100%)`;
+      updateCanvasBackground(compiledGradient);
+    }
+
+    gradientColor1.addEventListener('input', compileCustomGradientString);
+    gradientColor2.addEventListener('input', compileCustomGradientString);
+    gradientAngleSlider.addEventListener('input', compileCustomGradientString);
+
+    canvasBgFadeSlider.addEventListener('input', (e) => {
+      const fadeValue = parseInt(e.target.value);
+      state.background.fade = fadeValue;
+      bgFadeDisplay.textContent = `${fadeValue}%`;
+      updateCanvasBackground(state.background.value);
+    });
+
+    function updateCanvasBackground(styleValue) {
+      state.background.value = styleValue;
+      
+      let overlayNode = canvas.querySelector('.canvas-bg-overlay');
+      if (!overlayNode) {
+        overlayNode = document.createElement('div');
+        overlayNode.className = 'canvas-bg-overlay';
+        canvas.insertBefore(overlayNode, canvas.firstChild); 
+      }
+
+      const opacityMultiplier = (state.background.fade || 0) / 100;
+      overlayNode.style.opacity = opacityMultiplier;
+
+      if (state.background.type === 'image') {
+        canvas.style.background = styleValue;
+        canvas.style.backgroundSize = 'cover';
+        canvas.style.backgroundPosition = 'center';
+      } else {
+        canvas.style.background = styleValue;
+        canvas.style.backgroundSize = 'initial';
+        canvas.style.backgroundPosition = 'initial';
+      }
+      pushHistory();
+    }
+
+    // 2. Initialization & Event Listeners
+    addTextBtn.addEventListener('click', createTextElement);
+    addImageBtn.addEventListener('click', () => imageUploadInput.click());
+    imageUploadInput.addEventListener('change', handleImageUpload);
+    
+    undoBtn.addEventListener('click', () => loadHistory(historyIndex - 1));
+    redoBtn.addEventListener('click', () => loadHistory(historyIndex + 1));
+    deleteElementBtn.addEventListener('click', deleteSelectedElements);
+
+    saveBtn.addEventListener('click', saveStateToDisk);
+    loadBtn.addEventListener('click', () => loadJsonInput.click());
+    loadJsonInput.addEventListener('change', loadStateFromDisk);
+
+        // Workspace Zoom Handler Engine (Centered Transformation Lock)
+    const canvasZoomSlider = document.getElementById('canvasZoomSlider');
+    const zoomDisplay = document.getElementById('zoomDisplay');
+
+    canvasZoomSlider.addEventListener('input', (e) => {
+      const zoomValue = parseInt(e.target.value);
+      zoomDisplay.textContent = `${zoomValue}%`;
+      
+      const scaleMultiplier = zoomValue / 100;
+      
+      if (isEditingText || activeEditor) {
+        disableEditMode(); 
+      }
+      
+      canvas.style.setProperty('transform', `scale(${scaleMultiplier})`, 'important');
+      // Using 'center center' combined with flex-shrink: 0 forces scrollbars 
+      // to calculate tracking boundaries flawlessly on any monitor resolution
+      canvas.style.transformOrigin = 'center center';
+    });
+
+
+    // Vanilla javascript standalone page version    
+    // printBtn.addEventListener('click', () => {
+    //   //const htmlString = compileToPrintSheet(state);
+    //   const printWindow = window.open('', '_blank');
+    //   const html = compileToPrintSheet(state);
+
+    //   // Instead of document.write(html):
+    //   const blob = new Blob([html], { type: 'text/html' });
+    //   const url = URL.createObjectURL(blob);
+    //   printWindow.location.href = url;
+    //   printWindow.document.close();
+    // });
+
+    // Google Apps Script backend processing version
+    printBtn.addEventListener('click', async () => {
+      printBtn.textContent = "⏳ Preparing Assets...";
+      printBtn.disabled = true;
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        try {
+          const cleanElementsState = JSON.parse(JSON.stringify(state.elements));
+          const imageRegistryMap = {};
+
+          for (let el of cleanElementsState) {
+            if (el.type === 'image' && el.src && el.src.startsWith('data:')) {
+              const uniqueFileKey = 'img_cache_' + Math.random().toString(36).substr(2, 9);
+              imageRegistryMap[uniqueFileKey] = el.src; 
+              el.src = uniqueFileKey; 
+            }
+          }
+
+          const coreStatePayload = {
+            elements: cleanElementsState,
+            background: state.background || { type: 'color', value: '#ffffff' }
+          };
+
+          // Stream heavy assets securely by slicing them into 50KB pieces
+          const CHUNK_SIZE = 50 * 1024; 
+          for (let [cacheKey, largeDataStream] of Object.entries(imageRegistryMap)) {
+            const totalChunks = Math.ceil(largeDataStream.length / CHUNK_SIZE);
+            
+            for (let i = 0; i < totalChunks; i++) {
+              const startOffset = i * CHUNK_SIZE;
+              const chunkData = largeDataStream.substring(startOffset, startOffset + CHUNK_SIZE);
+              
+              printBtn.textContent = `⏳ Uploading Graphic (${Math.round(((i+1)/totalChunks)*100)}%)...`;
+              
+              await new Promise((resolve, reject) => {
+                google.script.run
+                  .withSuccessHandler(resolve)
+                  .withFailureHandler(reject)
+                  .registerPrintCacheSegment(cacheKey, i, totalChunks, chunkData);
+              });
+            }
+          }
+
+          printBtn.textContent = "⏳ Transpiling PDF Sheet...";
+          google.script.run
+            .withSuccessHandler((pdfUrl) => {
+              printBtn.textContent = "🖨️ Print A4";
+              printBtn.disabled = false;
+              if (pdfUrl) window.open(pdfUrl, '_blank');
+            })
+            .withFailureHandler((err) => {
+              alert("PDF Engine error: " + (err.message || err));
+              printBtn.textContent = "🖨️ Print A4";
+              printBtn.disabled = false;
+            })
+            .compileImposedPdfFromPayload(coreStatePayload);
+
+        } catch (uploadError) {
+          alert("Asset streaming fault: " + uploadError);
+          printBtn.textContent = "🖨️ Print A4";
+          printBtn.disabled = false;
+        }
+      } else {
+        const localA4Payload = compileToPrintSheet(state);
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(localA4Payload);
+        printWindow.document.close();
+        printBtn.textContent = "🖨️ Print A4";
+        printBtn.disabled = false;
+      }
+    });
+
+    // Layering
+    document.getElementById('btnFront').addEventListener('click', () => moveLayer('front'));
+    document.getElementById('btnForward').addEventListener('click', () => moveLayer('forward'));
+    document.getElementById('btnBackward').addEventListener('click', () => moveLayer('backward'));
+    document.getElementById('btnBack').addEventListener('click', () => moveLayer('back'));
+
+    // Alignment
+    document.getElementById('btnAlignLeft').addEventListener('click', () => alignElements('left'));
+    document.getElementById('btnAlignCenter').addEventListener('click', () => alignElements('center'));
+    document.getElementById('btnAlignRight').addEventListener('click', () => alignElements('right'));
+    document.getElementById('btnAlignTop').addEventListener('click', () => alignElements('top'));
+    document.getElementById('btnAlignMiddle').addEventListener('click', () => alignElements('middle'));
+    document.getElementById('btnAlignBottom').addEventListener('click', () => alignElements('bottom'));
+
+
+
+    // Typography Toolbar (Fixed, Context-Aware & Underline Supported)
+    document.getElementById('btnBold').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const elData = state.elements.find(el => el.selected);
+      if (!elData || elData.type !== 'text') return;
+      const elNode = document.getElementById(elData.id);
+      const contentNode = elNode ? elNode.querySelector('.element-content') : null;
+      
+      if (activeEditor === 'sidebar' && propInputs.contentRich) {
+        propInputs.contentRich.focus();
+        if (savedRange) {
+          const selection = window.getSelection();
+          selection.removeAllRanges(); selection.addRange(savedRange);
+        }
+        document.execCommand('bold', false, null);
+        const newHtml = propInputs.contentRich.innerHTML;
+        elData.content = newHtml;
+        if (contentNode) contentNode.innerHTML = newHtml;
+        const sel = window.getSelection();
+        if (sel.rangeCount > 0) savedRange = sel.getRangeAt(0).cloneRange();
+        pushHistory(); return; 
+      }
+
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed && contentNode && contentNode.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+        document.execCommand('bold', false, null);
+        if (contentNode) { elData.content = contentNode.innerHTML; syncContent(contentNode.innerHTML, 'canvas'); }
+        pushHistory(); return;
+      }
+
+      if (!elData.style) elData.style = {};
+      const currentWeight = elData.style.fontWeight || 'normal';
+      const newWeight = currentWeight === 'bold' ? 'normal' : 'bold';
+      updateActiveElement('fontWeight', newWeight, true);
+    });
+
+    document.getElementById('btnItalic').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const elData = state.elements.find(el => el.selected);
+      if (!elData || elData.type !== 'text') return;
+      const elNode = document.getElementById(elData.id);
+      const contentNode = elNode ? elNode.querySelector('.element-content') : null;
+      
+      if (activeEditor === 'sidebar' && propInputs.contentRich) {
+        propInputs.contentRich.focus();
+        if (savedRange) {
+          const selection = window.getSelection();
+          selection.removeAllRanges(); selection.addRange(savedRange);
+        }
+        document.execCommand('italic', false, null);
+        const newHtml = propInputs.contentRich.innerHTML;
+        elData.content = newHtml;
+        if (contentNode) contentNode.innerHTML = newHtml;
+        const sel = window.getSelection();
+        if (sel.rangeCount > 0) savedRange = sel.getRangeAt(0).cloneRange();
+        pushHistory(); return; 
+      }
+
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed && contentNode && contentNode.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+        document.execCommand('italic', false, null);
+        if (contentNode) { elData.content = contentNode.innerHTML; syncContent(contentNode.innerHTML, 'canvas'); }
+        pushHistory(); return;
+      }
+
+      if (!elData.style) elData.style = {};
+      const currentStyle = elData.style.fontStyle || 'normal';
+      const newStyle = currentStyle === 'italic' ? 'normal' : 'italic';
+      updateActiveElement('fontStyle', newStyle, true);
+    });
+
+    // New Underline Handler
+    document.getElementById('btnUnderline').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const elData = state.elements.find(el => el.selected);
+      if (!elData || elData.type !== 'text') return;
+      const elNode = document.getElementById(elData.id);
+      const contentNode = elNode ? elNode.querySelector('.element-content') : null;
+      
+      if (activeEditor === 'sidebar' && propInputs.contentRich) {
+        propInputs.contentRich.focus();
+        if (savedRange) {
+          const selection = window.getSelection();
+          selection.removeAllRanges(); selection.addRange(savedRange);
+        }
+        document.execCommand('underline', false, null);
+        const newHtml = propInputs.contentRich.innerHTML;
+        elData.content = newHtml;
+        if (contentNode) contentNode.innerHTML = newHtml;
+        const sel = window.getSelection();
+        if (sel.rangeCount > 0) savedRange = sel.getRangeAt(0).cloneRange();
+        pushHistory(); return; 
+      }
+
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed && contentNode && contentNode.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+        document.execCommand('underline', false, null);
+        if (contentNode) { elData.content = contentNode.innerHTML; syncContent(contentNode.innerHTML, 'canvas'); }
+        pushHistory(); return;
+      }
+
+      if (!elData.style) elData.style = {};
+      const currentDecor = elData.style.textDecoration || 'none';
+      const newDecor = currentDecor === 'underline' ? 'none' : 'underline';
+      updateActiveElement('textDecoration', newDecor, true);
+    });
+
+    document.getElementById('btnAlignLeftText').addEventListener('click', () => updateActiveElement('textAlign', 'left', true));
+    document.getElementById('btnAlignCenterText').addEventListener('click', () => updateActiveElement('textAlign', 'center', true));
+    document.getElementById('btnAlignRightText').addEventListener('click', () => updateActiveElement('textAlign', 'right', true));
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.target === canvas || e.target.classList.contains('safe-zone')) {
+        state.elements.forEach(el => el.selected = false);
+        syncSelectionToDOM();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+      
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); loadHistory(historyIndex - 1); } 
+        else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); loadHistory(historyIndex + 1); }
+      }
+      
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
+        e.preventDefault();
+        deleteSelectedElements();
+      }
+
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !isInput) {
+        e.preventDefault(); 
+        const selected = state.elements.filter(el => el.selected);
+        if (selected.length === 0) return;
+
+        // Core Zoom Fix: Extract real current magnification scale matrix metrics
+        const currentZoomSlider = document.getElementById('canvasZoomSlider');
+        const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
+        
+        const baseStep = e.shiftKey ? 10 : 1;
+        const adjustedStep = Math.round(baseStep / zoomScale); // Compensates layout increments under high zoom levels
+
+        selected.forEach(el => {
+          if (e.key === 'ArrowUp') el.y -= adjustedStep;
+          if (e.key === 'ArrowDown') el.y += adjustedStep;
+          if (e.key === 'ArrowLeft') el.x -= adjustedStep;
+          if (e.key === 'ArrowRight') el.x += adjustedStep;
+          applyStylesToDOM(el.id);
+        });
+        isNudging = true;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && isNudging) {
+        pushHistory();
+        isNudging = false;
+      }
+    });
+
+    document.addEventListener('selectionchange', () => {
+      const selected = state.elements.filter(e => e.selected);
+      if (selected.length !== 1) return;
+      
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const activeEl = document.getElementById(selected[0].id);
+        const canvasContentNode = activeEl ? activeEl.querySelector('.element-content') : null;
+        
+        if (canvasContentNode && canvasContentNode.contains(range.commonAncestorContainer)) {
+          savedRange = range.cloneRange();
+          activeEditor = 'canvas';
+        } else if (propInputs.contentRich.contains(range.commonAncestorContainer)) {
+          savedRange = range.cloneRange();
+          activeEditor = 'sidebar';
+        }
+      }
+    });
+
+    toggleHtmlBtn.addEventListener('click', () => {
+      isRawMode = !isRawMode;
+      if (isRawMode) {
+        toggleHtmlBtn.textContent = "View Rich Text";
+        propInputs.contentRich.style.display = 'none';
+        propInputs.contentRaw.style.display = 'block';
+      } else {
+        toggleHtmlBtn.textContent = "View Raw HTML";
+        propInputs.contentRich.style.display = 'block';
+        propInputs.contentRaw.style.display = 'none';
+      }
+    });
+
+    propInputs.contentRich.addEventListener('input', () => syncContent(propInputs.contentRich.innerHTML, 'rich'));
+    propInputs.contentRich.addEventListener('blur', pushHistory);
+    propInputs.contentRaw.addEventListener('input', () => syncContent(propInputs.contentRaw.value, 'raw'));
+    propInputs.contentRaw.addEventListener('blur', pushHistory);
+
+    function syncContent(html, source) {
+      const selected = state.elements.filter(e => e.selected);
+      if (selected.length !== 1) return;
+      const elData = selected[0];
+      elData.content = html;
+
+      if (source !== 'canvas') {
+        const canvasEl = document.getElementById(elData.id);
+        if (canvasEl) {
+          const contentNode = canvasEl.querySelector('.element-content');
+          if (contentNode.innerHTML !== html) contentNode.innerHTML = html;
+        }
+      }
+      if (source !== 'rich' && propInputs.contentRich.innerHTML !== html) propInputs.contentRich.innerHTML = html;
+      if (source !== 'raw' && propInputs.contentRaw.value !== html) propInputs.contentRaw.value = html;
+    }
+
+    propInputs.fontFamily.addEventListener('change', (e) => updateActiveElement('fontFamily', e.target.value, true));
+        // Dynamic Google Fonts Loader & Injector Engine
+    // const loadedGoogleFontsRegistry = new Set();
+
+    // propInputs.fontFamily.addEventListener('change', (e) => {
+    //   const selectedFontValue = e.target.value;
+      
+    //   // Extract the raw font family name out of the value string (e.g., pulling "Playfair Display" out of "'Playfair Display', serif")
+    //   const fontNameMatch = selectedFontValue.match(/'([^']+)'/);
+    //   const fontName = fontNameMatch ? fontNameMatch[1] : null;
+
+    //   // If it's a standard web font (like Arial) or already fetched, update styles immediately
+    //   if (!fontName || loadedGoogleFontsRegistry.has(fontName)) {
+    //     updateActiveElement('fontFamily', selectedFontValue, true);
+    //     return;
+    //   }
+
+    //   // Convert spaces into string formatting matching Google API protocols (e.g. "Playfair+Display")
+    //   const formattedFontApiString = fontName.replace(/\s+/g, '+');
+      
+    //   // Construct a premium variable font style inclusion path string block
+    //   const apiEndpointUrl = `https://googleapis.com{formattedFontApiString}:ital,wght@0,300;0,400;0,700;1,400&display=swap`;
+
+    //   // Instantiate a native link element to safely inject the typography stylesheet
+    //   const fontLinkNode = document.createElement('link');
+    //   fontLinkNode.rel = 'stylesheet';
+    //   fontLinkNode.href = apiEndpointUrl;
+      
+    //   // Wait for the server to completely resolve the assets before triggering canvas re-renders
+    //   fontLinkNode.onload = () => {
+    //     loadedGoogleFontsRegistry.add(fontName);
+    //     updateActiveElement('fontFamily', selectedFontValue, true);
+    //   };
+
+    //   fontLinkNode.onerror = () => {
+    //     console.error(`Failed to stream Google Font asset: ${fontName}`);
+    //     // Fallback to updating element anyway using standard browser fonts backup loops
+    //     updateActiveElement('fontFamily', selectedFontValue, true);
+    //   };
+
+    //   document.head.appendChild(fontLinkNode);
+    // });
+
+    propInputs.color.addEventListener('change', (e) => updateActiveElement('color', e.target.value, true));
+    
+    propInputs.fontSize.addEventListener('input', (e) => {
+      document.getElementById('fontSizeDisplay').textContent = e.target.value + 'px';
+      updateActiveElement('fontSize', e.target.value + 'px', true);
+    });
+
+    saveColorBtn.addEventListener('click', () => {
+      const currentColor = propInputs.color.value;
+      if (!state.palette.includes(currentColor)) {
+        state.palette.unshift(currentColor); 
+        if (state.palette.length > 6) state.palette.pop(); 
+        renderPalette();
+      }
+    });
+
+    function renderPalette() {
+      paletteSwatches.innerHTML = '';
+      state.palette.forEach(color => {
+        const swatch = document.createElement('div');
+        swatch.className = 'swatch';
+        swatch.style.background = color;
+        swatch.dataset.color = color;
+        swatch.addEventListener('mousedown', (e) => e.preventDefault()); 
+        swatch.addEventListener('click', (e) => {
+          propInputs.color.value = color; 
+          updateActiveElement('color', color, true);
+        });
+        paletteSwatches.appendChild(swatch);
+      });
+    }
+
+    // 3. Save & Load Functions
+    async function saveStateToDisk() {
+      state.elements.forEach(el => el.selected = false);
+      syncSelectionToDOM();
+      
+      const dataStr = JSON.stringify(state, null, 2);
+      let useFallback = false;
+      
+      try {
+        if (window.showSaveFilePicker) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'business_card_design.json',
+            types: [{ description: 'JSON File', accept: {'application/json': ['.json']} }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(dataStr);
+          await writable.close();
+        } else {
+          useFallback = true;
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          useFallback = true;
+        }
+      }
+
+      if (useFallback) {
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "business_card_design.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    }
+
+    function loadStateFromDisk(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const loadedState = JSON.parse(event.target.result);
+          if (loadedState && Array.isArray(loadedState.elements)) {
+            state.elements = loadedState.elements;
+
+            if (loadedState.palette) state.palette = loadedState.palette;
+
+            // Inside your loadStateFromDisk function, update this section:
+            if (loadedState.background) {
+              // 1. Force state mapping variables into memory BEFORE triggering updates
+              state.background = loadedState.background;
+              
+              // Ensure our data model guarantees a standard fallback number field if missing
+              if (state.background.fade === undefined) {
+                state.background.fade = 0;
+              }
+
+              // 2. Synchronize the visual UI sidebar controllers
+              bgTypeSelect.value = state.background.type;
+              canvasBgFadeSlider.value = state.background.fade;
+              bgFadeDisplay.textContent = `${state.background.fade}%`;
+              
+              // Trigger structural visibility panel toggles
+              bgSolidGroup.style.display = state.background.type === 'color' ? 'block' : 'none';
+              bgGradientGroup.style.display = state.background.type === 'gradient' ? 'block' : 'none';
+              bgCustomGradientGroup.style.display = state.background.type === 'custom-gradient' ? 'block' : 'none';
+              bgImageGroup.style.display = state.background.type === 'image' ? 'block' : 'none';
+
+              // 3. Synchronize specific input elements based on background profile type
+              if (state.background.type === 'color') {
+                canvasBgColorPicker.value = state.background.value;
+              } else if (state.background.type === 'gradient') {
+                bgGradientPreset.value = state.background.value;
+              } else if (state.background.type === 'custom-gradient') {
+                const valueStr = state.background.value;
+                const angleMatch = valueStr.match(/linear-gradient\s*\(\s*(\d+)deg/i);
+                const colorsMatch = valueStr.match(/(#[a-fA-F0-9]{6})/g);
+                
+                if (angleMatch) {
+                  gradientAngleSlider.value = angleMatch[1];
+                  gradientAngleDisplay.textContent = angleMatch[1] + '°';
+                }
+                if (colorsMatch && colorsMatch.length >= 2) {
+                  gradientColor1.value = colorsMatch[0];
+                  gradientColor2.value = colorsMatch[1];
+                }
+              }
+
+              // 4. Force a clean, fully-synchronized background layer re-render
+              // By wrapping this in a tiny 10ms timeout loop, we guarantee that the browser's 
+              // DOM layer fully recognizes your slider metrics before the canvas opacity is calculated.
+              setTimeout(() => {
+                updateCanvasBackground(state.background.value);
+              }, 10);
+            }
+
+
+            // // Inside loadStateFromDisk parser:
+            // if (loadedState.background) {
+            //   state.background = loadedState.background;
+            //   updateCanvasBackground(state.background.value);
+            //   bgTypeSelect.value = state.background.type;
+            //   bgTypeSelect.dispatchEvent(new Event('change'));
+              
+            //   // If it's a custom gradient, reverse-engineer it to sync your sidebar selectors
+            //   if (state.background.type === 'custom-gradient') {
+            //     const match = state.background.value.match(/linear-gradient\((\d+)deg,\s*(#[a-fA-F0-9]{6})\s*0%,\s*(#[a-fA-F0-9]{6})/);
+            //     if (match) {
+            //       gradientAngleSlider.value = match[1];
+            //       gradientAngleDisplay.textContent = match[1] + '°';
+            //       gradientColor1.value = match[2];
+            //       gradientColor2.value = match[3];
+            //     }
+            //   }
+            // }
+            
+            state.elements.forEach(el => el.selected = false);
+            
+            Array.from(canvas.children).forEach(child => {
+              if (child.id !== 'smart-guides-container' && !child.classList.contains('safe-zone')) {
+                child.remove();
+              }
+            });
+            
+            state.elements.forEach(el => renderElementToDOM(el));
+            renderPalette();
+            syncSelectionToDOM();
+            
+            historyStack = [];
+            historyIndex = -1;
+            pushHistory();
+          } else {
+            alert("Invalid design file format.");
+          }
+        } catch (err) {
+          alert("Error reading file.");
+          console.error(err);
+        } finally {
+          e.target.value = ''; 
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // 4. Element Creation & Deletion
+    function createTextElement() {
+      const id = 'el_' + Math.random().toString(36).substr(2, 9);
+      const newElement = {
+        id: id, type: 'text', 
+        x: 20 + spawnOffset, y: 20 + spawnOffset, 
+        width: 220, height: 50,
+        content: 'Double-click to edit text inline',
+        selected: true,
+        zIndex: state.elements.length + 1,
+        style: {
+          fontFamily: 'Arial, sans-serif', fontSize: '14px', fontWeight: 'normal',
+          fontStyle: 'normal', color: '#333333', textAlign: 'left', lineHeight: '1.2'
+        }
+      };
+      
+      incrementSpawnOffset();
+      state.elements.forEach(el => el.selected = false);
+      state.elements.push(newElement);
+      renderElementToDOM(newElement);
+      syncSelectionToDOM();
+      pushHistory();
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          // Re-encode at a print-appropriate resolution — critical because this
+          // same image gets embedded 10x on the imposed A4 sheet, so an
+          // uncompressed phone photo balloons the PDF conversion past its limits.
+          const compressedSrc = compressImageForCard(img);
+
+          let w = img.naturalWidth; let h = img.naturalHeight;
+          const maxDim = 150; // on-canvas display size only
+          if (w > maxDim || h > maxDim) {
+            const ratio = w / h;
+            if (w > h) { w = maxDim; h = maxDim / ratio; } else { h = maxDim; w = maxDim * ratio; }
+          }
+          createImageElement(compressedSrc, w, h);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    // Downscales/recompresses an uploaded image to a print-safe resolution.
+    // 85x55mm at 300dpi is roughly 1000x650px, so capping the longest edge at
+    // 1000px comfortably covers print quality while keeping file size sane.
+    function compressImageForCard(img, maxEdge = 1000, quality = 0.85) {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (Math.max(w, h) > maxEdge) {
+        const ratio = w / h;
+        if (w > h) { w = maxEdge; h = Math.round(maxEdge / ratio); }
+        else { h = maxEdge; w = Math.round(maxEdge * ratio); }
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      // JPEG keeps file size down; transparency is lost, an acceptable tradeoff
+      // for a card photo/logo background at this print size.
+      return c.toDataURL('image/jpeg', quality);
+    }
+    
+    function createImageElement(src, width, height) {
+      const id = 'el_' + Math.random().toString(36).substr(2, 9);
+      const newElement = {
+        id: id, type: 'image',
+        x: 20 + spawnOffset, y: 20 + spawnOffset,
+        width: width, height: height,
+        src: src,
+        selected: true,
+        zIndex: state.elements.length + 1
+      };
+      
+      incrementSpawnOffset();
+      state.elements.forEach(el => el.selected = false);
+      state.elements.push(newElement);
+      renderElementToDOM(newElement);
+      syncSelectionToDOM();
+      pushHistory();
+    }
+
+    function deleteSelectedElements() {
+      const selected = state.elements.filter(e => e.selected);
+      if (selected.length === 0) return;
+      
+      state.elements = state.elements.filter(el => !el.selected);
+      selected.forEach(el => {
+        const elNode = document.getElementById(el.id);
+        if (elNode) elNode.remove();
+      });
+      
+      syncSelectionToDOM();
+      pushHistory();
+    }
+
+    function incrementSpawnOffset() {
+      spawnOffset += 15;
+      if (spawnOffset > 80) spawnOffset = 0;
+    }
+
+    // 5. Grouping, Layering & Alignment Math
+    function groupSelected() {
+      const selected = state.elements.filter(e => e.selected);
+      if (selected.length < 2) return;
+      const newGroupId = 'grp_' + Math.random().toString(36).substr(2, 9);
+      selected.forEach(el => el.groupId = newGroupId);
+      syncPropertiesPanel();
+      pushHistory();
+    }
+
+    function ungroupSelected() {
+      const selected = state.elements.filter(e => e.selected);
+      selected.forEach(el => delete el.groupId);
+      syncPropertiesPanel();
+      pushHistory();
+    }
+
+    function moveLayer(direction) {
+      const selected = state.elements.filter(e => e.selected);
+      if (selected.length !== 1) return;
+      
+      const el = selected[0];
+      state.elements.sort((a, b) => a.zIndex - b.zIndex);
+      const index = state.elements.findIndex(e => e.id === el.id);
+      
+      state.elements.splice(index, 1);
+      
+      if (direction === 'front') state.elements.push(el);
+      else if (direction === 'back') state.elements.unshift(el);
+      else if (direction === 'forward') state.elements.splice(Math.min(state.elements.length, index + 1), 0, el);
+      else if (direction === 'backward') state.elements.splice(Math.max(0, index - 1), 0, el);
+      
+      state.elements.forEach((e, i) => {
+        e.zIndex = i + 1;
+        applyStylesToDOM(e.id);
+      });
+      
+      pushHistory();
+    }
+
+    function alignElements(type) {
+      const selected = state.elements.filter(e => e.selected);
+      if (selected.length < 2) return;
+
+      const minX = Math.min(...selected.map(e => e.x));
+      const maxX = Math.max(...selected.map(e => e.x + e.width));
+      const minY = Math.min(...selected.map(e => e.y));
+      const maxY = Math.max(...selected.map(e => e.y + e.height));
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      selected.forEach(el => {
+        if (type === 'left') el.x = minX;
+        if (type === 'center') el.x = centerX - (el.width / 2);
+        if (type === 'right') el.x = maxX - el.width;
+        if (type === 'top') el.y = minY;
+        if (type === 'middle') el.y = centerY - (el.height / 2);
+        if (type === 'bottom') el.y = maxY - el.height;
+        applyStylesToDOM(el.id);
+      });
+      
+      pushHistory();
+    }
+
+    // 6. Smart Guides & Snapping Engine
+    const SNAP_THRESHOLD = 5;
+
+    function clearSmartGuides() {
+      smartGuidesContainer.innerHTML = '';
+    }
+
+    function drawGuide(axis, position) {
+      const guide = document.createElement('div');
+      guide.className = `smart-guide ${axis === 'x' ? 'vertical' : 'horizontal'}`;
+      if (axis === 'x') guide.style.left = `${position}px`;
+      else guide.style.top = `${position}px`;
+      smartGuidesContainer.appendChild(guide);
+    }
+
+    function getSnapTargets() {
+      // Core Zoom Fix: Extract unscaled canvas boundaries rather than scaled client dimensions
+      const currentZoomSlider = document.getElementById('canvasZoomSlider');
+      const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
+      
+      const rect = canvas.getBoundingClientRect();
+      const layoutWidth = rect.width / zoomScale;
+      const layoutHeight = rect.height / zoomScale;
+      
+      const guidesX = [layoutWidth / 2];
+      const guidesY = [layoutHeight / 2];
+      
+      state.elements.forEach(el => {
+        if (!el.selected) {
+          guidesX.push(el.x, el.x + el.width / 2, el.x + el.width);
+          guidesY.push(el.y, el.y + el.height / 2, el.y + el.height);
+        }
+      });
+
+      let gridStep = 0;
+      if (gridSnapToggle.checked) {
+        gridStep = (layoutWidth / 85) * 5; // Yields a precise 5mm grid calculation under any transformation factor
+      }
+
+      return { guidesX, guidesY, gridStep };
+    }
+
+    function evaluateSnap(value, guides, gridStep) {
+      // Adjust proximity threshold steps to snap smoothly at high or low magnifications
+      const currentZoomSlider = document.getElementById('canvasZoomSlider');
+      const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
+      const adjustedThreshold = SNAP_THRESHOLD / zoomScale;
+
+      let closestGuide = null;
+      let minDiff = adjustedThreshold;
+
+      for (let g of guides) {
+        const diff = Math.abs(value - g);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestGuide = g;
+        }
+      }
+      if (closestGuide !== null) return { snapped: closestGuide, isGuide: true };
+
+      if (gridStep > 0) {
+        const gridSnap = Math.round(value / gridStep) * gridStep;
+        if (Math.abs(value - gridSnap) < adjustedThreshold) {
+          return { snapped: gridSnap, isGuide: false };
+        }
+      }
+
+      return { snapped: value, isGuide: false };
+    }
+
+
+    function snapDrag(proposedX, proposedY, w, h) {
+      const { guidesX, guidesY, gridStep } = getSnapTargets();
+      clearSmartGuides();
+
+      let finalX = proposedX;
+      let finalY = proposedY;
+
+      const ptsX = [
+        { val: proposedX, offset: 0 },
+        { val: proposedX + w/2, offset: w/2 },
+        { val: proposedX + w, offset: w }
+      ];
+      for (let pt of ptsX) {
+        const res = evaluateSnap(pt.val, guidesX, gridStep);
+        if (res.snapped !== pt.val) {
+          finalX = res.snapped - pt.offset;
+          if (res.isGuide) drawGuide('x', res.snapped);
+          break; 
+        }
+      }
+
+      const ptsY = [
+        { val: proposedY, offset: 0 },
+        { val: proposedY + h/2, offset: h/2 },
+        { val: proposedY + h, offset: h }
+      ];
+      for (let pt of ptsY) {
+        const res = evaluateSnap(pt.val, guidesY, gridStep);
+        if (res.snapped !== pt.val) {
+          finalY = res.snapped - pt.offset;
+          if (res.isGuide) drawGuide('y', res.snapped);
+          break;
+        }
+      }
+
+      return { finalX, finalY };
+    }
+
+    function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isImage, ratio) {
+      const { guidesX, guidesY, gridStep } = getSnapTargets();
+      clearSmartGuides();
+
+      let finalX = proposedX;
+      let finalY = proposedY;
+      let finalW = proposedW;
+      let finalH = proposedH;
+
+      let snappedX = false;
+      let snappedY = false;
+
+      if (handlePos.includes('e')) {
+        const res = evaluateSnap(proposedX + proposedW, guidesX, gridStep);
+        if (res.snapped !== proposedX + proposedW) {
+          finalW = res.snapped - proposedX;
+          if (res.isGuide) drawGuide('x', res.snapped);
+          snappedX = true;
+        }
+      } else if (handlePos.includes('w')) {
+        const res = evaluateSnap(proposedX, guidesX, gridStep);
+        if (res.snapped !== proposedX) {
+          finalW = proposedW + (proposedX - res.snapped);
+          finalX = res.snapped;
+          if (res.isGuide) drawGuide('x', res.snapped);
+          snappedX = true;
+        }
+      }
+
+      if (handlePos.includes('s')) {
+        const res = evaluateSnap(proposedY + proposedH, guidesY, gridStep);
+        if (res.snapped !== proposedY + proposedH) {
+          finalH = res.snapped - proposedY;
+          if (res.isGuide) drawGuide('y', res.snapped);
+          snappedY = true;
+        }
+      } else if (handlePos.includes('n')) {
+        const res = evaluateSnap(proposedY, guidesY, gridStep);
+        if (res.snapped !== proposedY) {
+          finalH = proposedH + (proposedY - res.snapped);
+          finalY = res.snapped;
+          if (res.isGuide) drawGuide('y', res.snapped);
+          snappedY = true;
+        }
+      }
+
+      if (isImage) {
+        if (snappedX) {
+          finalH = finalW / ratio;
+          if (handlePos.includes('n')) finalY = proposedY + (proposedH - finalH);
+          document.querySelectorAll('.smart-guide.horizontal').forEach(g => g.remove());
+        } else if (snappedY) {
+          finalW = finalH * ratio;
+          if (handlePos.includes('w')) finalX = proposedX + (proposedW - finalW);
+          document.querySelectorAll('.smart-guide.vertical').forEach(g => g.remove());
+        } else {
+          finalH = finalW / ratio;
+          if (handlePos.includes('n')) finalY = proposedY + (proposedH - finalH);
+          if (handlePos.includes('w')) finalX = proposedX + (proposedW - finalW);
+        }
+      }
+
+      return { finalX, finalY, finalW, finalH };
+    }
+
+    // 7. DOM Rendering
+    function renderElementToDOM(elData) {
+      const elNode = document.createElement('div');
+      elNode.className = 'design-element';
+      elNode.id = elData.id;
+      
+      let contentNode;
+
+      if (elData.type === 'text') {
+        contentNode = document.createElement('div');
+        contentNode.className = 'element-content';
+        contentNode.innerHTML = elData.content;
+        
+        contentNode.addEventListener('dblclick', () => {
+          const selected = state.elements.filter(e => e.selected);
+          if (selected.length > 1) return; 
+          
+          isEditingText = true;
+          contentNode.contentEditable = true;
+          contentNode.focus();
+        });
+
+        contentNode.addEventListener('input', () => syncContent(contentNode.innerHTML, 'canvas'));
+        contentNode.addEventListener('blur', pushHistory);
+
+      } else if (elData.type === 'image') {
+        contentNode = document.createElement('img');
+        contentNode.className = 'element-content';
+        
+        // SECURITY FIX: Prevent empty src from triggering a local file load loop
+        if (elData.src && elData.src.trim() !== '') {
+          contentNode.src = elData.src;
+        } else {
+          // Fallback to transparent 1x1 pixel if image data is missing
+          contentNode.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        }
+        
+        contentNode.draggable = false; 
+      }
+
+      elNode.appendChild(contentNode);
+
+      const handles = ['nw', 'ne', 'sw', 'se'];
+      handles.forEach(pos => {
+        const handle = document.createElement('div');
+        handle.className = `resize-handle ${pos}`;
+        handle.addEventListener('mousedown', (e) => initResize(e, elData.id, pos));
+        elNode.appendChild(handle);
+      });
+
+      elNode.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('resize-handle') || (contentNode.contentEditable === "true")) return;
+        initDrag(e, elData.id);
+      });
+
+      canvas.appendChild(elNode);
+      applyStylesToDOM(elData.id);
+    }
+
+    // 8. Apply State to DOM
+    function applyStylesToDOM(id) {
+      const elData = state.elements.find(e => e.id === id);
+      const elNode = document.getElementById(id);
+      if (!elData || !elNode) return;
+
+      elNode.style.left = `${elData.x}px`;
+      elNode.style.top = `${elData.y}px`;
+      elNode.style.width = `${elData.width}px`;
+      elNode.style.height = `${elData.height}px`;
+      elNode.style.zIndex = elData.zIndex;
+
+      if (elData.type === 'text') {
+        const contentNode = elNode.querySelector('.element-content');
+        const s = elData.style;
+        
+        if (contentNode.innerHTML !== elData.content && contentNode.contentEditable !== "true") {
+          contentNode.innerHTML = elData.content;
+        }
+
+        contentNode.style.fontFamily = s.fontFamily;
+        contentNode.style.fontSize = s.fontSize;
+        contentNode.style.fontWeight = s.fontWeight;
+        contentNode.style.fontStyle = s.fontStyle;
+        contentNode.style.textDecoration = s.textDecoration || 'none'; // Added Underline Direct Property Injection
+        contentNode.style.color = s.color;
+        contentNode.style.textAlign = s.textAlign;
+        contentNode.style.lineHeight = s.lineHeight;
+      }
+    }
+
+    
+    function updateActiveElement(key, value, isStyle) {
+      // 1. Core Selection and Validation
+      let elData = state.elements.find(e => e.selected);
+      if (!elData && state.activeElementId) {
+        elData = state.elements.find(e => e.id === state.activeElementId);
+      }
+      
+      if (!elData || elData.type !== 'text') return; 
+
+      const elNode = document.getElementById(elData.id);
+      if (!elNode) return;
+      
+      const contentNode = elNode.querySelector('.element-content');
+      const isInlineAllowed = isStyle && key !== 'textAlign' && key !== 'lineHeight';
+
+      // 2. Mode A: Inline Rich-Text Character Range Formatting
+      if (isInlineAllowed && savedRange && !savedRange.collapsed && activeEditor) {
+        const span = document.createElement('span');
+        span.style[key] = value;
+
+        try {
+          const contents = savedRange.extractContents();
+          span.appendChild(contents);
+          savedRange.insertNode(span);
+
+          const selection = window.getSelection();
+          const newRange = document.createRange();
+          newRange.selectNodeContents(span);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          savedRange = newRange.cloneRange();
+
+          if (activeEditor === 'sidebar') {
+            propInputs.contentRich.focus();
+            syncContent(propInputs.contentRich.innerHTML, 'rich');
+          } else {
+            contentNode.focus();
+            syncContent(contentNode.innerHTML, 'canvas');
+          }
+          
+          pushHistory();
+          return; 
+        } catch (err) {
+          console.error("Inline formatting error:", err);
+        }
+      }
+
+      // 3. Mode B: Block-Level Fallback
+      if (isStyle) {
+        if (!elData.style) elData.style = {};
+        elData.style[key] = value;
+        
+        if (contentNode) {
+          contentNode.style[key] = value;
+          
+          // Clean up child inline styles if we reset the block to standard format
+          if (value === 'normal' || value === 'none') {
+            contentNode.querySelectorAll('span, b, i, u').forEach(child => {
+              if (key === 'fontWeight') child.style.fontWeight = '';
+              if (key === 'fontStyle') child.style.fontStyle = '';
+              if (key === 'textDecoration') child.style.textDecoration = ''; 
+            });
+          }
+        }
+      } else {
+        elData[key] = value;
+        if (key === 'content') savedRange = null; 
+      }
+      
+      applyStylesToDOM(elData.id);
+      pushHistory();
+    }
+
+
+        // 10. Drag & Drop Engine (Multi-Select & Zoom Support)
+    function initDrag(e, id) {
+      e.preventDefault(); 
+      e.stopPropagation();
+      
+      const clickedEl = state.elements.find(el => el.id === id);
+      if (!clickedEl) return;
+
+      if (e.shiftKey) {
+        const targetState = !clickedEl.selected;
+        if (clickedEl.groupId) {
+          state.elements.filter(el => el.groupId === clickedEl.groupId).forEach(el => el.selected = targetState);
+        } else {
+          clickedEl.selected = targetState;
+        }
+      } else {
+        if (!clickedEl.selected) {
+          state.elements.forEach(el => el.selected = false);
+          if (clickedEl.groupId) {
+            state.elements.filter(el => el.groupId === clickedEl.groupId).forEach(el => el.selected = true);
+          } else {
+            clickedEl.selected = true;
+          }
+        }
+      }
+      syncSelectionToDOM();
+
+      const selectedElements = state.elements.filter(el => el.selected);
+      const startX = e.clientX;
+      const startY = e.clientY;
+      
+      const initialPositions = selectedElements.map(el => ({ id: el.id, x: el.x, y: el.y }));
+      const primaryEl = state.elements.find(e => e.id === id);
+      const initialPrimaryPos = initialPositions.find(p => p.id === id);
+
+      document.body.classList.add('is-dragging');
+
+      function onMouseMove(ev) {
+        // Core Zoom Fix: Extract real current scaling factor from the DOM slider component
+        const currentZoomSlider = document.getElementById('canvasZoomSlider');
+        const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
+
+        // Scale raw client pixel deltas into internal canvas layout grid steps
+        const dx = (ev.clientX - startX) / zoomScale;
+        const dy = (ev.clientY - startY) / zoomScale;
+        
+        let proposedX = initialPrimaryPos.x + dx;
+        let proposedY = initialPrimaryPos.y + dy;
+
+        const { finalX, finalY } = snapDrag(proposedX, proposedY, primaryEl.width, primaryEl.height);
+        
+        const actualDx = finalX - initialPrimaryPos.x;
+        const actualDy = finalY - initialPrimaryPos.y;
+
+        initialPositions.forEach(pos => {
+          const el = state.elements.find(e => e.id === pos.id);
+          el.x = pos.x + actualDx;
+          el.y = pos.y + actualDy;
+          applyStylesToDOM(el.id);
+        });
+      }
+
+      function onMouseUp() {
+        document.body.classList.remove('is-dragging');
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        clearSmartGuides();
+        pushHistory();
+      }
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    }
+
+
+    // 11. Resize Engine (Scoped Variable Zoom Correction)
+    function initResize(e, id, handlePos) {
+      e.preventDefault(); 
+      e.stopPropagation();
+      
+      state.elements.forEach(el => el.selected = (el.id === id));
+      syncSelectionToDOM();
+
+      const elData = state.elements.find(el => el.id === id);
+      if (!elData) return;
+
+      // Track initial viewport pointer origins securely inside the parent closure scope
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const initialX = elData.x;
+      const initialY = elData.y;
+      const initialW = elData.width;
+      const initialH = elData.height;
+
+      const minW = 20; const minH = 20;
+      const cursorClass = (handlePos === 'nw' || handlePos === 'se') ? 'is-resizing-nwse' : 'is-resizing-nesw';
+      document.body.classList.add(cursorClass);
+
+      function onMouseMove(ev) {
+        const currentZoomSlider = document.getElementById('canvasZoomSlider');
+        const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
+
+        // Read the tracking references cleanly across scopes
+        let dx = (ev.clientX - startX) / zoomScale;
+        let dy = (ev.clientY - startY) / zoomScale;
+
+        let proposedW = initialW;
+        let proposedH = initialH;
+        let proposedX = initialX;
+        let proposedY = initialY;
+
+        if (elData.type === 'image') {
+          const ratio = initialW / initialH;
+          if (Math.abs(dx) > Math.abs(dy)) {
+            dy = (handlePos === 'ne' || handlePos === 'sw') ? -(dx / ratio) : (dx / ratio);
+          } else {
+            dx = (handlePos === 'ne' || handlePos === 'sw') ? -(dy * ratio) : (dy * ratio);
+          }
+        }
+
+        if (handlePos.includes('e')) proposedW = Math.max(minW, initialW + dx);
+        if (handlePos.includes('s')) proposedH = Math.max(minH, initialH + dy);
+        if (handlePos.includes('w')) {
+          proposedW = Math.max(minW, initialW - dx);
+          proposedX = initialX + (initialW - proposedW);
+        }
+        if (handlePos.includes('n')) {
+          proposedH = Math.max(minH, initialH - dy);
+          proposedY = initialY + (initialH - proposedH);
+        }
+
+        const ratio = initialW / initialH;
+        const { finalX, finalY, finalW, finalH } = snapResize(
+          proposedX, proposedY, proposedW, proposedH, 
+          handlePos, elData.type === 'image', ratio
+        );
+
+        elData.x = finalX;
+        elData.y = finalY;
+        elData.width = finalW;
+        elData.height = finalH;
+
+        applyStylesToDOM(id);
+      }
+
+      function onMouseUp() {
+        document.body.classList.remove(cursorClass);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        clearSmartGuides();
+        pushHistory();
+      }
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    }
+
+
+    // 12. UI & State Sync Utilities
+    function disableEditMode() {
+      if (!isEditingText) return;
+      isEditingText = false;
+      
+      document.querySelectorAll('.element-content').forEach(node => {
+        if(node.tagName !== 'IMG') node.contentEditable = false;
+      });
+      
+      savedRange = null;
+      activeEditor = null;
+      window.getSelection().removeAllRanges(); 
+    }
+
+    function syncSelectionToDOM() {
+      disableEditMode();
+      
+      const selectedCount = state.elements.filter(e => e.selected).length;
+      
+      state.elements.forEach(elData => {
+        const elNode = document.getElementById(elData.id);
+        if (!elNode) return;
+        
+        if (elData.selected) {
+          elNode.classList.add('selected');
+          if (selectedCount === 1) elNode.classList.add('single-selected');
+          else elNode.classList.remove('single-selected');
+        } else {
+          elNode.classList.remove('selected', 'single-selected');
+        }
+      });
+      
+      syncPropertiesPanel();
+    }
+
+    function syncPropertiesPanel() {
+      const selected = state.elements.filter(e => e.selected);
+      
+      // 1. Permanently keep the main panel layout container block visible to prevent UI jumping
+      propertiesPanel.style.display = 'flex';
+      
+      // Hide all standard parameter control component groups by default
+      textPropertiesGroup.style.display = 'none';
+      imagePropertiesGroup.style.display = 'none';
+      layerPropertiesGroup.style.display = 'none';
+      alignmentPropertiesGroup.style.display = 'none';
+      deleteElementBtn.style.display = 'none';
+
+      // FIX: Find or append the placeholder node directly into the inner scroll box
+      const targetScrollBox = propertiesPanel.querySelector('.sidebar-scroll-box') || propertiesPanel;
+      
+      let placeholderNode = document.getElementById('sidebarPlaceholderState');
+      if (!placeholderNode) {
+        placeholderNode = document.createElement('div');
+        placeholderNode.id = 'sidebarPlaceholderState';
+        placeholderNode.style.cssText = 'flex: 1; text-align: center; color: var(--label-color); padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; margin: 0;';
+        placeholderNode.innerHTML = '<span style="font-size: 32px; opacity: 0.6;">🎛️</span><p style="font-size: 13px; font-weight: 500; line-height: 1.5; margin: 0; max-width: 200px;">Select an element on the canvas to configure its properties.</p>';
+        targetScrollBox.appendChild(placeholderNode);
+      }
+      
+          // 2. Case A: Blank Canvas State (No elements selected)
+      if (selected.length === 0) {
+        placeholderNode.style.display = 'flex';
+        return; 
+      }
+          
+      // Elements are selected, hide the empty placeholder view state frame
+      placeholderNode.style.display = 'none';
+      deleteElementBtn.style.display = 'block';
+      
+      // 3. Case B: Single Element Mode
+      if (selected.length === 1) {
+        layerPropertiesGroup.style.display = 'block';
+        const elData = selected[0];
+        
+        if (elData.type === 'text') {
+          textPropertiesGroup.style.display = 'block';
+          propInputs.contentRich.innerHTML = elData.content;
+          propInputs.contentRaw.value = elData.content;
+          propInputs.fontFamily.value = elData.style.fontFamily;
+          propInputs.fontSize.value = parseInt(elData.style.fontSize);
+          document.getElementById('fontSizeDisplay').textContent = elData.style.fontSize;
+          propInputs.color.value = elData.style.color;
+          
+          // Sync Typography Row Buttons
+          // Toggles an inline style (bold/italic/underline) either on the current
+          // text-range selection (canvas or sidebar editor) or, if nothing is
+          // selected, on the whole text element. Replaces the old execCommand-based
+          // approach, which is deprecated and unreliable across browsers, with the
+          // same manual Range wrapping already used for font-size/color.
+          function toggleTextStyle(key, onValue, offValue) {
+            const elData = state.elements.find(el => el.selected);
+            if (!elData || elData.type !== 'text') return;
+
+            const elNode = document.getElementById(elData.id);
+            const contentNode = elNode ? elNode.querySelector('.element-content') : null;
+
+            if (savedRange && !savedRange.collapsed && activeEditor) {
+              const hostNode = activeEditor === 'sidebar' ? propInputs.contentRich : contentNode;
+              if (!hostNode) return;
+
+              const startNode = savedRange.startContainer;
+              const startEl = startNode.nodeType === 3 ? startNode.parentElement : startNode;
+              const currentValue = startEl ? window.getComputedStyle(startEl)[key] : offValue;
+              const isOn = String(currentValue).indexOf(onValue) !== -1;
+              const newValue = isOn ? offValue : onValue;
+
+              const span = document.createElement('span');
+              span.style[key] = newValue;
+
+              try {
+                const contents = savedRange.extractContents();
+                span.appendChild(contents);
+                savedRange.insertNode(span);
+
+                const selection = window.getSelection();
+                const newRange = document.createRange();
+                newRange.selectNodeContents(span);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+                savedRange = newRange.cloneRange();
+
+                const newHtml = hostNode.innerHTML;
+                elData.content = newHtml;
+                syncContent(newHtml, activeEditor === 'sidebar' ? 'rich' : 'canvas');
+
+                pushHistory();
+                return;
+              } catch (err) {
+                console.error('Inline style toggle error:', err);
+              }
+            }
+
+            if (!elData.style) elData.style = {};
+            const current = elData.style[key] || offValue;
+            const newValue = current === onValue ? offValue : onValue;
+            updateActiveElement(key, newValue, true);
+          }
+
+          document.getElementById('btnBold').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            toggleTextStyle('fontWeight', 'bold', 'normal');
+          });
+
+          document.getElementById('btnItalic').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            toggleTextStyle('fontStyle', 'italic', 'normal');
+          });
+
+          document.getElementById('btnUnderline').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            toggleTextStyle('textDecoration', 'underline', 'none');
+          });
+          
+        } else if (elData.type === 'image') {
+          imagePropertiesGroup.style.display = 'block';
+        }
+      // 4. Case C: Multi-Select Alignment Mode
+      } else if (selected.length > 1) {
+        alignmentPropertiesGroup.style.display = 'block';
+        
+        const firstGroupId = selected[0].groupId;
+        const allSameGroup = firstGroupId && selected.every(el => el.groupId === firstGroupId);
+        
+        if (allSameGroup) {
+          btnGroupToggle.textContent = 'Ungroup';
+          btnGroupToggle.onclick = ungroupSelected;
+        } else {
+          btnGroupToggle.textContent = 'Group';
+          btnGroupToggle.onclick = groupSelected;
+        }
+      }
+    }
+
+// 13. A4 Print Compiler (High-Fidelity Constant Ratio Imposition Engine)
+function compileToPrintSheet(jsonLayoutState) {
+  // Use a reliable base-resolution mapping standard instead of live layout boundaries.
+  // 85mm UK card standard maps precisely onto your core 321px layout frame scale factor bounds.
+  // If your design canvas default layout is scaled differently, adjust this base width metric.
+  const BASE_CANVAS_WIDTH_PX = 321; 
+  const pxToMmFactor = 85 / BASE_CANVAS_WIDTH_PX; 
+
+  let cardInnerHtml = '';
+  
+  // Sort elements by zIndex order to guarantee layering depth remains accurate on paper
+  const sortedElements = [...jsonLayoutState.elements].sort((a, b) => a.zIndex - b.zIndex);
+  
+  sortedElements.forEach(el => {
+    // Map layout pixel coordinates cleanly to real absolute physical millimetres
+    const leftMm = (el.x * pxToMmFactor).toFixed(4);
+    const topMm = (el.y * pxToMmFactor).toFixed(4);
+    const widthMm = (el.width * pxToMmFactor).toFixed(4);
+    const heightMm = (el.height * pxToMmFactor).toFixed(4);
+
+    if (el.type === 'text') {
+      const s = el.style || {};
+      const fontDecor = s.textDecoration || 'none';
+      
+      cardInnerHtml += `
+        <div style="
+          position: absolute; 
+          left: ${leftMm}mm; 
+          top: ${topMm}mm; 
+          width: ${widthMm}mm; 
+          height: ${heightMm}mm; 
+          font-family: ${s.fontFamily || 'Arial, sans-serif'}; 
+          font-size: ${s.fontSize || '14px'}; 
+          font-weight: ${s.fontWeight || 'normal'}; 
+          font-style: ${s.fontStyle || 'normal'}; 
+          text-decoration: ${fontDecor};
+          color: ${s.color || '#333333'}; 
+          text-align: ${s.textAlign || 'left'}; 
+          line-height: ${s.lineHeight || '1.2'}; 
+          white-space: pre-wrap; 
+          word-wrap: break-word; 
+          overflow: hidden;
+        ">${el.content}</div>`;
+        
+    } else if (el.type === 'image') {
+      const src = el.src && el.src.trim() !== '' ? el.src : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+      cardInnerHtml += `
+        <img src="${src}" style="
+          position: absolute; 
+          left: ${leftMm}mm; 
+          top: ${topMm}mm; 
+          width: ${widthMm}mm; 
+          height: ${heightMm}mm; 
+          object-fit: fill;
+        " />`;
+    }
+  });
+
+  // Extract master background state profile parameters cleanly
+  let cardBackgroundCss = 'background: #ffffff;';
+  let overlayHtml = '';
+  
+  if (jsonLayoutState.background) {
+    const bg = jsonLayoutState.background;
+    const fadeOpacity = (bg.fade || 0) / 100;
+    
+    // Inject a matching printed overlay layer configuration right behind the card components matrix
+    overlayHtml = `<div style="position: absolute; top:0; left:0; width:100%; height:100%; background:#ffffff; opacity:${fadeOpacity}; z-index:0; pointer-events:none;"></div>`;
+    
+    cardBackgroundCss = bg.type === 'image' ? `background: ${bg.value}; background-size: cover; background-position: center;` : `background: ${bg.value};`;
+  }
+
+  // Update your cards HTML generation wrapper loop to inject that overlay html structure:
+  let cardsHtml = '';
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 2; col++) {
+      cardsHtml += `
+        <div style="position: absolute; left: ${col * 85}mm; top: ${row * 55}mm; width: 85mm; height: 55mm; overflow: hidden; ${cardBackgroundCss}">
+          ${overlayHtml} <!-- Added Overlay html to preserve backgrounds fade on paper -->
+          ${cardInnerHtml}
+        </div>`;
+    }
+  }
+
+
+  // Position crop guidelines securely inside the margins framework
+  let cropMarksHtml = '';
+  [0, 85, 170].forEach(x => {
+    cropMarksHtml += `<div class="crop-mark-v" style="left: ${x}mm;"></div>`;
+  });
+  [0, 55, 110, 165, 220, 275].forEach(y => {
+    cropMarksHtml += `<div class="crop-mark-h" style="top: ${y}mm;"></div>`;
+  });
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!--link rel="stylesheet" href="https://googleapis.com"-->
+  <title>A4 Print Sheet - Imposed Card Matrix</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      background: #ffffff; 
+      -webkit-print-color-adjust: exact; 
+      print-color-adjust: exact; 
+    }
+    .sheet { 
+      width: 210mm; 
+      height: 297mm; 
+      position: relative; 
+      page-break-inside: avoid; 
+      padding-top: 11mm; 
+      padding-left: 20mm; 
+    }
+    .grid { 
+      width: 170mm; 
+      height: 275mm; 
+      position: relative; 
+    }
+    .crop-mark-v { 
+      position: absolute; 
+      width: 0; 
+      border-left: 0.5pt dashed #999999; 
+      top: -5mm; 
+      bottom: -5mm; 
+      z-index: 9999; 
+    }
+    .crop-mark-h { 
+      position: absolute; 
+      height: 0; 
+      border-top: 0.5pt dashed #999999; 
+      left: -5mm; 
+      right: -5mm; 
+      z-index: 9999; 
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="grid">
+      ${cropMarksHtml}
+      ${cardsHtml}
+    </div>
+  </div>
+  <script>
+    // Triggers instantly the exact microsecond the DOM tree finishes loading 
+    // without stalling server-side compilation threads
+    if (document.readyState === 'complete') {
+      window.print();
+    } else {
+      window.addEventListener('DOMContentLoaded', () => window.print());
+    }
+  <\/script>
+</body>
+</html>`;
+}
+
+
+    // // Initialize
+    // renderPalette();
+    // pushHistory(); 
+
+  </script>
+</body>
+</html>
