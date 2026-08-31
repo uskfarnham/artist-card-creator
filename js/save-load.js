@@ -18,37 +18,64 @@ async function saveStateToDisk() {
   syncSelectionToDOM();
 
   const dataStr = JSON.stringify(state, null, 2);
-  let useFallback = false;
 
-  try {
-    if (window.showSaveFilePicker) {
+  if (window.showSaveFilePicker) {
+    let writable = null;
+
+    try {
       const handle = await window.showSaveFilePicker({
         suggestedName: 'artist_card_design.json',
         types: [{ description: 'JSON File', accept: { 'application/json': ['.json'] } }],
       });
-      const writable = await handle.createWritable();
-      await writable.write(dataStr);
-      await writable.close();
-    } else {
-      useFallback = true;
+      // Nothing has touched the target file yet at this point — createWritable()
+      // below is what actually truncates it. Any failure up to and including
+      // that call is safe to quietly fall back from.
+      writable = await handle.createWritable();
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return; // user deliberately cancelled the picker — not an error
+      }
+      // Failed before the file was touched — most commonly NotAllowedError,
+      // seen in restricted/embedded browser contexts (e.g. VS Code's built-in
+      // dev browser, which doesn't support the File System Access API's
+      // write-permission model even though the picker dialog itself may
+      // appear to work). Falls through to the plain download below, quietly.
+      console.warn('File System Access API unavailable for writing (falling back to direct download):', err);
     }
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      useFallback = true;
+
+    if (writable) {
+      // A writable stream is open, which means the target file IS now
+      // truncated. From here on, a failure can't be silently retried via a
+      // different mechanism without risking leaving the original file
+      // permanently empty if that retry isn't completed.
+      try {
+        await writable.write(dataStr);
+        await writable.close();
+        return; // success
+      } catch (err) {
+        console.error('Save failed partway through writing:', err);
+        alert(
+          'Saving failed partway through (' + err.message + ').\n\n' +
+          'The file you were saving to may now be empty or incomplete — ' +
+          'please use "Save As..." again with a new filename to be safe.'
+        );
+        return;
+      }
     }
   }
 
-  if (useFallback) {
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'artist_card_design.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
+  // Plain download: used for browsers without File System Access API
+  // support at all (Firefox, Safari), and as the safe fallback above when
+  // the picker/permission step failed before any file was touched.
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'artist_card_design.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function loadStateFromDisk(e) {
@@ -63,15 +90,11 @@ function loadStateFromDisk(e) {
         state.elements = loadedState.elements;
 
         if (loadedState.palette) state.palette = loadedState.palette;
-
         if (loadedState.background) {
           state.background = loadedState.background;
-
           if (state.background.fade === undefined) {
             state.background.fade = 0;
           }
-
-          syncBackgroundControlsToState(); // background.js
         }
 
         state.elements.forEach(el => el.selected = false);
@@ -83,6 +106,17 @@ function loadStateFromDisk(e) {
         });
 
         state.elements.forEach(el => renderElementToDOM(el));
+
+        // Background restoration (including the fade overlay div) must come
+        // AFTER the cleanup loop above, not before — that loop removes any
+        // canvas child that isn't the safe-zone/guides layer, which
+        // previously included the overlay div if it was created first here,
+        // silently discarding the fade effect even though state.background
+        // itself was correctly loaded.
+        if (loadedState.background) {
+          syncBackgroundControlsToState(); // background.js
+        }
+
         renderPalette();
         syncSelectionToDOM();
 
