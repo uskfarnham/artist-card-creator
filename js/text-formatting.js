@@ -272,10 +272,5 @@ propInputs.color.addEventListener('change', (e) => {
 });
 
 document.getElementById('saveColorBtn').addEventListener('click', () => {
-  const currentColor = propInputs.color.value;
-  if (!state.palette.includes(currentColor)) {
-    state.palette.unshift(currentColor);
-    if (state.palette.length > 6) state.palette.pop();
-    renderPalette(); // defined in main.js
-  }
+  addColorToPalette(propInputs.color.value); // was the inline unshift/pop/renderPalette block
 });

@@ -251,6 +251,12 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
 .tooltip-text { visibility: hidden; width: 220px; background-color: #1f2937; color: #fff; text-align: center; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1000; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.2s; font-size: 11px; font-weight: normal; line-height: 1.4; pointer-events: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
 .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
 .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+/* Tap-to-show variant of the existing hover tooltip, for touch devices
+   (iPad etc.) where :hover never fires. Toggled by JS in main.js. */
+.tooltip-container.tooltip-visible .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
 
 /* --- Smart Guides --- */
 #smart-guides-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 9999; }

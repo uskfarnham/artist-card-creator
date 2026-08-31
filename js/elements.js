@@ -112,10 +112,18 @@ function createImageElement(src, width, height) {
 
 // --- Shape defaults ---------------------------------------------------
 
+// Shared by resize-lock logic (drag-resize.js) and future shape additions —
+// any shapeKind added here automatically gets Shift/lock-proportions resize
+// behavior for free, without touching drag-resize.js again.
+const BOX_SHAPE_KINDS = ['rectangle', 'ellipse', 'triangle'];
+
 const SHAPE_DEFAULT_STYLE = {
   fill: '#2563eb', fillEnabled: true,
-  stroke: '#1f2937', strokeWidth: 2, strokeEnabled: true
+  stroke: '#1f2937', strokeWidth: 2, strokeEnabled: true,
+  lockAspect: false // persistent equivalent of holding Shift — the only
+                     // option touch-only devices (no physical Shift key) have
 };
+
 
 function createShapeElement(shapeKind) {
   const id = 'el_' + Math.random().toString(36).substr(2, 9);
@@ -171,6 +179,21 @@ const shapeStrokeEnabled = document.getElementById('shapeStrokeEnabled');
 const shapeStrokeColor = document.getElementById('shapeStrokeColor');
 const shapeStrokeWidth = document.getElementById('shapeStrokeWidth');
 
+const shapeLockAspect = document.getElementById('shapeLockAspect');
+const shapeFillPalette = document.getElementById('shapeFillPalette');
+const shapeStrokePalette = document.getElementById('shapeStrokePalette');
+
+shapeLockAspect.addEventListener('change', (e) => {
+  updateSelectedShapeStyle(s => s.lockAspect = e.target.checked);
+});
+
+document.getElementById('shapeSaveFillColorBtn').addEventListener('click', () => {
+  addColorToPalette(shapeFillColor.value); // main.js
+});
+document.getElementById('shapeSaveStrokeColorBtn').addEventListener('click', () => {
+  addColorToPalette(shapeStrokeColor.value); // main.js
+});
+
 // Populates the panel's controls from a shape element's current style.
 // Called by syncPropertiesPanel (main.js) when a single shape is selected.
 function syncShapePanelToElement(elData) {
@@ -182,6 +205,7 @@ function syncShapePanelToElement(elData) {
   shapeStrokeColor.value = s.stroke;
   shapeStrokeColor.disabled = !s.strokeEnabled;
   shapeStrokeWidth.value = s.strokeWidth;
+  shapeLockAspect.checked = s.lockAspect; 
 }
 
 // Applies a control change to the selected shape's style, re-renders it,

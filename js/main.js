@@ -83,6 +83,24 @@ document.querySelectorAll('.accordion-trigger').forEach(trigger => {
   });
 });
 
+// Tap-to-show support for ALL .tooltip-container elements (existing ones —
+// grid snapping, safe zone, aspect ratio — get this for free too, not just
+// the new shape hint). Hover still works normally for mouse users; this
+// only adds the tap path that touch devices were missing entirely.
+document.querySelectorAll('.tooltip-container').forEach(container => {
+  container.addEventListener('click', (e) => {
+    const wasOpen = container.classList.contains('tooltip-visible');
+    document.querySelectorAll('.tooltip-container.tooltip-visible')
+      .forEach(el => el.classList.remove('tooltip-visible'));
+    if (!wasOpen) container.classList.add('tooltip-visible');
+    e.stopPropagation();
+  });
+});
+document.addEventListener('click', () => {
+  document.querySelectorAll('.tooltip-container.tooltip-visible')
+    .forEach(el => el.classList.remove('tooltip-visible'));
+});
+
 // --- Element Creation / History / Save-Load Wiring -------------------------
 
 addTextBtn.addEventListener('click', createTextElement);
@@ -188,20 +206,45 @@ window.addEventListener('keyup', (e) => {
 
 // --- Color Palette ---------------------------------------------------------
 
-function renderPalette() {
-  paletteSwatches.innerHTML = '';
+// Renders state.palette's swatches into any container, with a caller-supplied
+// selection handler — lets text/shape-fill/shape-stroke all share one saved
+// palette instead of each maintaining their own separate list.
+function renderPaletteInto(containerEl, onSelectColor) {
+  containerEl.innerHTML = '';
   state.palette.forEach(color => {
     const swatch = document.createElement('div');
     swatch.className = 'swatch';
     swatch.style.background = color;
     swatch.dataset.color = color;
     swatch.addEventListener('mousedown', (e) => e.preventDefault());
-    swatch.addEventListener('click', () => {
-      propInputs.color.value = color;
-      propInputs.color.dispatchEvent(new Event('change')); // reuses the change handler in text-formatting.js
-    });
-    paletteSwatches.appendChild(swatch);
+    swatch.addEventListener('click', () => onSelectColor(color));
+    containerEl.appendChild(swatch);
   });
+}
+
+function renderAllPalettes() {
+  renderPaletteInto(paletteSwatches, (color) => {
+    propInputs.color.value = color;
+    propInputs.color.dispatchEvent(new Event('change')); // text-formatting.js handler
+  });
+  renderPaletteInto(shapeFillPalette, (color) => {
+    shapeFillColor.value = color;
+    updateSelectedShapeStyle(s => s.fill = color); // elements.js
+  });
+  renderPaletteInto(shapeStrokePalette, (color) => {
+    shapeStrokeColor.value = color;
+    updateSelectedShapeStyle(s => s.stroke = color);
+  });
+}
+
+// Shared by text's saveColorBtn (text-formatting.js) and the two new shape
+// save buttons (elements.js) — one path for "add this color to the palette".
+function addColorToPalette(color) {
+  if (!state.palette.includes(color)) {
+    state.palette.unshift(color);
+    if (state.palette.length > 6) state.palette.pop();
+    renderAllPalettes();
+  }
 }
 
 // --- Selection & Properties Panel Sync -------------------------------------
@@ -299,5 +342,5 @@ function syncPropertiesPanel() {
 
 // --- Init ---------------------------------------------------------------
 
-renderPalette();
+renderAllPalettes(); // was: renderPalette();
 pushHistory();

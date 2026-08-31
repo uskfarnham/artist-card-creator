@@ -117,7 +117,7 @@ function loadStateFromDisk(e) {
           syncBackgroundControlsToState(); // background.js
         }
 
-        renderPalette();
+        renderAllPalettes();
         syncSelectionToDOM();
 
         historyStack = [];

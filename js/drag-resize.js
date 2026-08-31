@@ -283,37 +283,13 @@ function initResize(e, id, handlePos) {
     const currentZoomSlider = document.getElementById('canvasZoomSlider');
     const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
 
-    let dx = (ev.clientX - startX) / zoomScale;
-    let dy = (ev.clientY - startY) / zoomScale;
+    const dx = (ev.clientX - startX) / zoomScale;
+    const dy = (ev.clientY - startY) / zoomScale;
 
     let proposedW = initialW;
     let proposedH = initialH;
     let proposedX = initialX;
     let proposedY = initialY;
-
-    // if (elData.type === 'image') {
-    //   const ratio = initialW / initialH;
-    //   if (Math.abs(dx) > Math.abs(dy)) {
-    //     dy = (handlePos === 'ne' || handlePos === 'sw') ? -(dx / ratio) : (dx / ratio);
-    //   } else {
-    //     dx = (handlePos === 'ne' || handlePos === 'sw') ? -(dy * ratio) : (dy * ratio);
-    //   }
-    // }
-
-        // Ratio-lock applies to images always, and to ellipses only while Shift
-    // is held (free resize otherwise) — same square/circle pattern as the
-    // planned polygon/star rx=ry Shift-constrain in PROJECT_STATUS.md.
-    const isEllipseCircleLock = elData.type === 'shape' && elData.shapeKind === 'ellipse' && ev.shiftKey;
-    const ratioLocked = elData.type === 'image' || isEllipseCircleLock;
-    const lockRatio = elData.type === 'image' ? (initialW / initialH) : 1;
-
-    if (ratioLocked) {
-      if (Math.abs(dx) > Math.abs(dy)) {
-        dy = (handlePos === 'ne' || handlePos === 'sw') ? -(dx / lockRatio) : (dx / lockRatio);
-      } else {
-        dx = (handlePos === 'ne' || handlePos === 'sw') ? -(dy * lockRatio) : (dy * lockRatio);
-      }
-    }
 
     if (handlePos.includes('e')) proposedW = Math.max(minW, initialW + dx);
     if (handlePos.includes('s')) proposedH = Math.max(minH, initialH + dy);
@@ -326,11 +302,41 @@ function initResize(e, id, handlePos) {
       proposedY = initialY + (initialH - proposedH);
     }
 
-    // const ratio = initialW / initialH;
-    // const { finalX, finalY, finalW, finalH } = snapResize(
-    //   proposedX, proposedY, proposedW, proposedH,
-    //   handlePos, elData.type === 'image', ratio
-    // );
+    // Ratio-lock applies to images always; to any box-based shape
+    // (rectangle, ellipse, triangle — BOX_SHAPE_KINDS in elements.js) when
+    // either the persistent "Lock proportions" toggle is on, or Shift is
+    // held as a temporary override (desktop only — no physical Shift key
+    // on touch, hence the toggle).
+    const isBoxShape = elData.type === 'shape' && BOX_SHAPE_KINDS.includes(elData.shapeKind);
+    const shapeRatioLock = isBoxShape && (elData.style.lockAspect || ev.shiftKey);
+    const ratioLocked = elData.type === 'image' || shapeRatioLock;
+    const lockRatio = elData.type === 'image' ? (initialW / initialH) : 1; // target W:H
+
+    if (ratioLocked) {
+      // Whichever axis has moved further (relative to its own starting
+      // size) drives the resize; the OTHER axis is derived from THAT
+      // axis's proposed SIZE via the ratio — not from its raw mouse delta.
+      // Deriving from size (always correctly signed, already computed
+      // above per-handle) instead of delta (which flips sign whenever dx
+      // and dy have opposite signs — e.g. dragging up-and-right on an
+      // 'se' handle) is what fixes the jitter: the old approach forced one
+      // axis's sign onto the other depending on which raw delta happened
+      // to be larger that frame, flip-flopping between growing/shrinking.
+      const wChange = Math.abs(proposedW - initialW) / initialW;
+      const hChange = Math.abs(proposedH - initialH) / initialH;
+
+      if (wChange >= hChange) {
+        proposedH = proposedW / lockRatio;
+      } else {
+        proposedW = proposedH * lockRatio;
+      }
+      proposedW = Math.max(minW, proposedW);
+      proposedH = Math.max(minH, proposedH);
+
+      if (handlePos.includes('w')) proposedX = initialX + (initialW - proposedW);
+      if (handlePos.includes('n')) proposedY = initialY + (initialH - proposedH);
+    }
+
     const { finalX, finalY, finalW, finalH } = snapResize(
       proposedX, proposedY, proposedW, proposedH,
       handlePos, ratioLocked, lockRatio
