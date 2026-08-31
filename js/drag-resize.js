@@ -291,12 +291,27 @@ function initResize(e, id, handlePos) {
     let proposedX = initialX;
     let proposedY = initialY;
 
-    if (elData.type === 'image') {
-      const ratio = initialW / initialH;
+    // if (elData.type === 'image') {
+    //   const ratio = initialW / initialH;
+    //   if (Math.abs(dx) > Math.abs(dy)) {
+    //     dy = (handlePos === 'ne' || handlePos === 'sw') ? -(dx / ratio) : (dx / ratio);
+    //   } else {
+    //     dx = (handlePos === 'ne' || handlePos === 'sw') ? -(dy * ratio) : (dy * ratio);
+    //   }
+    // }
+
+        // Ratio-lock applies to images always, and to ellipses only while Shift
+    // is held (free resize otherwise) — same square/circle pattern as the
+    // planned polygon/star rx=ry Shift-constrain in PROJECT_STATUS.md.
+    const isEllipseCircleLock = elData.type === 'shape' && elData.shapeKind === 'ellipse' && ev.shiftKey;
+    const ratioLocked = elData.type === 'image' || isEllipseCircleLock;
+    const lockRatio = elData.type === 'image' ? (initialW / initialH) : 1;
+
+    if (ratioLocked) {
       if (Math.abs(dx) > Math.abs(dy)) {
-        dy = (handlePos === 'ne' || handlePos === 'sw') ? -(dx / ratio) : (dx / ratio);
+        dy = (handlePos === 'ne' || handlePos === 'sw') ? -(dx / lockRatio) : (dx / lockRatio);
       } else {
-        dx = (handlePos === 'ne' || handlePos === 'sw') ? -(dy * ratio) : (dy * ratio);
+        dx = (handlePos === 'ne' || handlePos === 'sw') ? -(dy * lockRatio) : (dy * lockRatio);
       }
     }
 
@@ -311,10 +326,14 @@ function initResize(e, id, handlePos) {
       proposedY = initialY + (initialH - proposedH);
     }
 
-    const ratio = initialW / initialH;
+    // const ratio = initialW / initialH;
+    // const { finalX, finalY, finalW, finalH } = snapResize(
+    //   proposedX, proposedY, proposedW, proposedH,
+    //   handlePos, elData.type === 'image', ratio
+    // );
     const { finalX, finalY, finalW, finalH } = snapResize(
       proposedX, proposedY, proposedW, proposedH,
-      handlePos, elData.type === 'image', ratio
+      handlePos, ratioLocked, lockRatio
     );
 
     elData.x = finalX;

@@ -49,6 +49,7 @@ const layerPropertiesGroup = document.getElementById('layerPropertiesGroup');
 const alignmentPropertiesGroup = document.getElementById('alignmentPropertiesGroup');
 const btnGroupToggle = document.getElementById('btnGroupToggle');
 const paletteSwatches = document.getElementById('paletteSwatches');
+const shapePropertiesGroup = document.getElementById('shapePropertiesGroup');
 
 // Note: propInputs is declared in text-formatting.js, not here — its
 // addEventListener calls run as top-level statements before main.js loads,
@@ -87,6 +88,9 @@ document.querySelectorAll('.accordion-trigger').forEach(trigger => {
 addTextBtn.addEventListener('click', createTextElement);
 addImageBtn.addEventListener('click', () => imageUploadInput.click());
 imageUploadInput.addEventListener('change', handleImageUpload);
+document.getElementById('addRectBtn').addEventListener('click', () => createShapeElement('rectangle'));
+document.getElementById('addEllipseBtn').addEventListener('click', () => createShapeElement('ellipse'));
+document.getElementById('addTriangleBtn').addEventListener('click', () => createShapeElement('triangle'));
 
 undoBtn.addEventListener('click', () => loadHistory(historyIndex - 1));
 redoBtn.addEventListener('click', () => loadHistory(historyIndex + 1));
@@ -228,9 +232,11 @@ function syncPropertiesPanel() {
 
   textPropertiesGroup.style.display = 'none';
   imagePropertiesGroup.style.display = 'none';
+  shapePropertiesGroup.style.display = 'none';   // NEW
   layerPropertiesGroup.style.display = 'none';
   alignmentPropertiesGroup.style.display = 'none';
   deleteElementBtn.style.display = 'none';
+  
 
   const targetScrollBox = propertiesPanel.querySelector('.sidebar-scroll-box') || propertiesPanel;
 
@@ -270,7 +276,11 @@ function syncPropertiesPanel() {
       propInputs.color.value = elData.style.color;
     } else if (elData.type === 'image') {
       imagePropertiesGroup.style.display = 'block';
+    } else if (elData.type === 'shape') {
+      shapePropertiesGroup.style.display = 'block';
+      syncShapePanelToElement(elData);
     }
+
   } else if (selected.length > 1) {
     alignmentPropertiesGroup.style.display = 'block';
 

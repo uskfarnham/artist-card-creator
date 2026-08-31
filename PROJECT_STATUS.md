@@ -1,18 +1,19 @@
 # Project Status — Artist Card Creator
 *(renamed from "Business Card Creator")*
 
-_Last updated: 2026-08-30_
+_Last updated: 2026-08-31_
 
 ---
 
 ## Current State
 
-**Migration to a static site is code-complete but UNTESTED.** The app has been
-rewritten from Google Apps Script (`Code.gs` + `Index.html`, ~1900 lines) to a
-standalone static site intended for GitHub Pages, hosted in its own repo under the
-`uskfarnham` account (e.g. `uskfarnham.github.io/artist-card-creator/`).
+**Migration to a static site is complete, tested, and live on GitHub Pages.**
+The app has been fully rewritten from Google Apps Script (`Code.gs` +
+`Index.html`, ~1900 lines) to a standalone static site, hosted in its own repo
+under the `uskfarnham` account (`uskfarnham.github.io/artist-card-creator/`).
+Committed, pushed, and confirmed working in a real deployed environment.
 
-### File structure (new)
+### File structure
 ```
 artist-card-creator/
 ├── index.html
@@ -34,261 +35,313 @@ artist-card-creator/
 Plain `<script>` tags (not ES modules) — top-level `const`/`let` share one global
 lexical scope across all classic scripts on the page, so modules can reference
 functions/variables defined in files loaded later without any import/export
-machinery, as long as those references are only *resolved* at runtime (inside a
-function body), not at file-load time.
-
-### ⚠️ Needs real browser testing before trusting it
-This was a substantial rewrite (contentEditable → Quill, server-side PDF →
-client-side print, GAS → static). Suggested test order: create/drag/resize
-elements → text formatting via Quill → background controls → save/load JSON →
-print/PDF flow. **Re-update this file after testing** — some of the "Resolved"
-items below are resolved *in design*, not yet confirmed working.
+machinery, **as long as those references are only resolved inside a function
+body invoked later, not in a top-level statement that runs immediately at
+script load** (this distinction caused two real bugs during testing — see Key
+Learnings).
 
 ---
 
 ## Resolved by the Migration
 
-- **Static site migration** — complete (pending testing). No more Apps Script,
-  no `HtmlService`, no iframe. `index.html` + `css/styles.css` + `js/*.js`, plain
-  files, git-based deploy to GitHub Pages.
+- **Static site migration** — complete, tested, live.
 - **Iframe-fighting CSS removed** — the `!important`-laden layout reset block
-  (`.app-container`, `.main-body` locked to 100vw/100vh) existed solely to fight
-  the GAS iframe sandbox. Gone; replaced with plain flexbox in `css/styles.css`.
-- **Chunked-cache silent-failure bug class eliminated by construction** — not
-  patched, structurally impossible now. The old flow uploaded compressed images
-  to `CacheService` in 50KB chunks (`registerPrintCacheSegment`) and reassembled
-  them server-side, silently skipping any missing chunk. The new `print.js`
-  builds the imposed HTML entirely client-side (images already live as
-  compressed base64 in memory) — no upload, no chunking, no cache, no server
-  round-trip at all.
-- **Server-side PDF generation replaced** — `compileImposedPdfFromPayload`
-  (`HtmlService.getAs('application/pdf')` + Drive upload) is gone. `print.js`
-  now opens the imposed A4 sheet in a new tab and calls `window.print()`
-  (the original pre-GAS approach, restored). Every major browser's print
-  dialog offers "Save as PDF" as a destination, so file-saving still works
-  without a client-side PDF library dependency.
-- **Duplicated `serverSideCompileToPrintSheet` in `Code.gs`** — moot; `Code.gs`
-  no longer exists.
-- **Near-duplicate imposition logic (server vs. client)** — moot for the same
-  reason; only one `compileToPrintSheet` now, in `print.js`.
-- **Dead/commented-out code cleanup** — done as part of the rewrite; nothing
-  carried over verbatim, each file was reconstructed clean.
+  existed solely to fight the GAS iframe sandbox. Gone; replaced with plain
+  flexbox in `css/styles.css`.
+- **Chunked-cache silent-failure bug class eliminated by construction** — no
+  server round-trip at all anymore, so the class of bug can't recur.
+- **Server-side PDF generation replaced** — `print.js` opens the imposed A4
+  sheet in a new tab and calls `window.print()`; "Save as PDF" via the
+  browser's native print dialog covers file-saving without a client-side PDF
+  library dependency.
+- **Duplicated `serverSideCompileToPrintSheet` / near-duplicate imposition
+  logic** — moot; `Code.gs` no longer exists, only one `compileToPrintSheet`
+  now, in `print.js`.
 - **Rich-text styling via span-wrapping (fragile at scale)** — replaced
-  entirely. The old `extractContents()`/`insertNode()` DOM-span approach is
-  gone; **Quill** now handles all rich text editing, storing content as a
-  Delta (data model) rather than nested DOM spans, so overlapping styles
-  (bold one word, italic another, differing colors, etc.) no longer produce
-  span soup. Quill lives in the sidebar only (`#quillEditorContainer`); canvas
-  text elements are a read-only preview. See `js/text-formatting.js`.
-- **Font-size slider → dropdown** — the numeric slider was fiddly for precise
-  selection; replaced with a `<select>` of standard sizes (8–96px), matched
-  exactly to Quill's registered size whitelist.
-- **App renamed** to "Artist Card Creator" throughout (title, brand text, saved
-  file name `artist_card_design.json`, code comments).
-- **Card-size groundwork laid** — new `js/card-sizes.js` is the single source of
-  truth for card dimensions (currently only `uk-eu` 85×55mm is active).
-  `print.js`'s imposition grid (cards per row/column, crop marks) is now
-  *calculated* from the active card size rather than hardcoded to 2×5 — produces
-  an identical layout today, but the medium-priority "card size configuration"
-  backlog item below only needs a size-selector UI and canvas-dimension wiring
-  now, not a print-logic rewrite too.
+  entirely by **Quill**, storing content as a Delta rather than nested DOM
+  spans. Quill lives in the sidebar only (`#quillEditorContainer`); canvas
+  text elements are a read-only preview. `js/text-formatting.js`.
+- **Font-size slider → dropdown** — standard sizes (8–96px), matched to
+  Quill's registered size whitelist.
+- **App renamed** to "Artist Card Creator" throughout.
+- **Card-size groundwork laid** — `js/card-sizes.js` is the single source of
+  truth for card dimensions (currently only `uk-eu` 85×55mm active).
+  `print.js`'s imposition grid is calculated from the active size, not
+  hardcoded — ready for the card-size-configuration backlog item without
+  another print-logic rewrite.
+
+---
+
+## Bugs Found & Fixed During Testing (2026-08-30 – 2026-08-31)
+
+A substantial rewrite surfaced real bugs, as expected. Documenting root
+causes here since several point at general patterns worth watching for in
+future work on this codebase, not just one-off fixes.
+
+- **Alignment not visible on canvas/print** — Quill's default `align` format
+  is class-based (`ql-align-center`), and that class is only styled *inside*
+  Quill's own stylesheet, scoped to `.ql-editor`. Copying the HTML out to the
+  canvas preview (outside `.ql-editor`) meant the class had no matching CSS
+  anywhere. Fixed by swapping to Quill's style-based `align` attributor
+  (`attributors/style/align`), baking alignment in as inline `text-align`
+  CSS instead — portable wherever the HTML ends up.
+- **Font-family dropdown had no effect** — same root cause as alignment:
+  Quill's default `font` format is class-based with a tiny built-in whitelist
+  (`serif`/`monospace` only), silently rejecting anything else. Fixed with
+  the style-based `attributors/style/font` attributor instead.
+- **Font-family dropdown showed blank for earlier-applied (non-most-recent)
+  fonts** — browsers don't always preserve inline `font-family` strings
+  verbatim on read-back (quote handling can differ), so exact string
+  comparison against dropdown option values could silently fail to match
+  anything. Fixed with normalized (quote/whitespace-insensitive) matching —
+  `normalizeFontFamilyValue`/`setFontFamilySelectValue` in
+  `text-formatting.js`.
+- **Font/size/color/bold/italic/underline/alignment controls didn't reflect
+  the actual cursor position** — these were only ever set once, when an
+  element was first selected, from its whole-element default style; nothing
+  updated them as the cursor moved through differently-formatted text. Fixed
+  by syncing all of them live on Quill's `selection-change` event
+  (`syncToolbarToSelection`), including toggling `.active` on the
+  bold/italic/underline/alignment buttons.
+- **Arrow-key nudge silently did nothing after editing text** — clicking a
+  canvas element to reposition it calls `preventDefault()` on the mousedown
+  (needed to suppress default text-selection during drag), which *also*
+  blocks the browser's default behavior of blurring whatever was previously
+  focused. If Quill (or any sidebar control — same bug, not Quill-specific)
+  still held focus from an earlier interaction, arrow keys kept going there
+  instead of nudging the element. Fixed with an explicit
+  `releaseFocusForCanvasInteraction()` blur, called at the start of every
+  drag/resize/deselect interaction (`main.js`). A visible highlight
+  (`.quill-editing-active` class + border/shadow) and a persistent hint line
+  were also added under the Quill box so the "which mode am I in" state is
+  visible, not just fixed.
+- **Double-clicking a text element didn't visibly focus Quill** — calling
+  `quill.focus()` immediately after switching the sidebar panel from
+  `display:none` to `display:block` in the same synchronous script run can
+  silently fail in some browsers; the layout change needs a moment to take
+  effect first. Fixed by deferring the focus call one frame via
+  `requestAnimationFrame`.
+- **Undo/redo never touched the background** — `pushHistory`/`loadHistory`
+  only ever snapshotted `state.elements`; `state.background` (color,
+  gradient, image, fade) wasn't part of the history model at all. This also
+  meant the background-fade overlay `<div>` was silently deleted on every
+  undo (the cleanup loop removes any canvas child that isn't the safe-zone/
+  guides layer, which unintentionally included it) and never recreated until
+  the next background edit. Fixed by including `state.background` in every
+  history snapshot, and refactoring background application into two
+  reusable pieces: `applyBackgroundToDOM()` (DOM only, no history push) and
+  `syncBackgroundControlsToState()` (sidebar controls + DOM, including the
+  gradient-string reverse-engineering regex) — both now shared correctly by
+  `loadHistory`, `loadStateFromDisk`, and normal user-driven background
+  edits, rather than three separate copies of similar logic.
+- **Background fade lost specifically on save/reload** (a variant of the bug
+  above) — `loadStateFromDisk` was calling the background-restoring sync
+  *before* its own canvas-children cleanup loop, which then deleted the
+  fade-overlay div the sync had just created. Fixed by reordering: cleanup →
+  render elements → restore background, not the other way round.
+- **"Invalid CSS colour" console error after undo, following gradient
+  eyedropper use** — turned out to be the same background-history gap above;
+  resolved as part of that fix. Confirmed non-reproducing after.
+- **Save As showed a second, different save dialog, and cancelling it could
+  leave the file empty/corrupted** — `createWritable()` (File System Access
+  API) truncates the target file immediately, *before* any actual write
+  happens. The original save logic fell back to a completely different save
+  mechanism (plain blob download) on any non-`AbortError` failure — but if
+  that failure happened *after* `createWritable()` had already truncated the
+  file, and the user then cancelled the fallback's dialog, the file was left
+  permanently empty. Root cause of the failure itself, when actually hit
+  during testing, was a `NotAllowedError` — specific to running in VS Code's
+  built-in dev browser, which doesn't support the File System Access API's
+  write-permission model even though its picker dialog appears to work; not
+  expected to affect real users in a normal browser tab. Fixed regardless of
+  environment: the save logic now distinguishes failures *before* the
+  writable stream opens (nothing touched yet, safe to fall back to a plain
+  download quietly) from failures *after* it opens (file already truncated —
+  surfaces a clear warning instead of silently chaining into a second,
+  differently-behaved save flow).
+- **Touch/tablet input didn't work at all (tested on iPad)** — drag/resize
+  logic was built entirely on mouse events (`mousedown`/`mousemove`/
+  `mouseup`), which don't fire reliably for touch-driven interactions in
+  Safari/iOS. Converted every drag/resize/deselect listener to **Pointer
+  Events** (`pointerdown`/`pointermove`/`pointerup`), which unify mouse,
+  touch, and pen input, plus added `touch-action: none` CSS on
+  `.design-element`/`.resize-handle` specifically (not the wider workspace,
+  which still allows normal touch-scroll/pinch-zoom when not interacting
+  with an element) so the browser doesn't intercept a touch-drag as a page
+  gesture instead of passing it to the app.
 
 ---
 
 ## Backlog
 
-### High Priority
-- [ ] **Test the migration thoroughly** (see test order above) before relying
-      on this as the working version. Confirm: element drag/resize/snap, Quill
-      formatting (including overlapping styles — the original motivating bug),
-      background controls, save/load round-trip, print/PDF output on at least
-      one real printer or print-to-PDF check against actual mm measurements.
-- [ ] **New feature: drag-and-drop shapes.** Add shape elements (line, rectangle,
-      ellipse, triangle now; polygon and star planned later) that can be placed
-      on the card alongside text and image elements, with move/resize
-      interactions consistent with the app's existing conventions.
+### High Priority — next up: shapes
+- [ ] **New feature: drag-and-drop shapes.** Add shape elements (line,
+      rectangle, ellipse, triangle now; polygon and star planned later) that
+      can be placed on the card alongside text and image elements, with
+      move/resize interactions consistent with the app's existing
+      conventions. **Design work is largely done (see below) — next session
+      starts implementation, in dependency order similar to the migration
+      itself.**
 
       **Design decisions made (2026-08-30 sketch session):**
       - **Per-shape-kind geometry, not one shared bounding box.** Each
         `shapeKind` stores its own natural geometry field set rather than
-        forcing every shape through `x, y, width, height` — avoids shoehorning
-        shapes whose natural representation doesn't fit a box (a line is two
-        points, not a box with a diagonal drawn in it):
-        - `line`: `x1, y1, x2, y2` — explicit endpoints, no bounding box stored.
+        forcing every shape through `x, y, width, height`:
+        - `line`: `x1, y1, x2, y2` — explicit endpoints, no bounding box.
         - `rectangle` / `ellipse` / `triangle`: `x, y, width, height` — this
-          genuinely is their natural geometry, so a bounding box is the right
-          fit here, not a compromise.
-        - Future `star` / `polygon`: box-based like ellipse — `x, y, width,
-          height`, with vertices derived from independent `rx`/`ry` rather
-          than a single radius (see the resize-behavior correction below for
-          why). Not designed in full detail yet (vertex count, inner-radius
-          ratio for the star specifically), but the geometry family is settled.
+          genuinely is their natural geometry.
+        - Future `star` / `polygon`: also box-based (`x, y, width, height`),
+          with vertices derived from independent `rx = width/2, ry = height/2`
+          — **not** a single shared radius. A single-radius model was the
+          original sketch but was corrected once considered properly: it can
+          only scale uniformly and can't express "wider than tall" at all.
+          `rx`/`ry` lets polygon/star reuse the exact same 4-corner-handle
+          resize as rectangle/ellipse, with **Shift constraining `rx = ry`**
+          for a "regular" symmetric shape — same pattern as square/circle.
+      - **Net result: geometry only splits into two kinds** — **box-based**
+        (rectangle, ellipse, triangle, future polygon/star — one shared
+        4-corner resize + optional Shift-constrain) and **endpoint-based**
+        (line — its own 2-handle resize). A third "center+radius, single
+        handle" category was sketched initially and found unnecessary.
       - **The `.design-element` wrapper div's bounding box is derived, not
-        authoritative**, for any shape whose real geometry isn't box-shaped
-        (i.e. lines now, center+radius shapes later). E.g. a line's wrapper
-        box is computed as the min/max of its two endpoints. This keeps the
-        existing layering/click-handling/selection-styling machinery working
-        unchanged for every shape kind, while the source of truth for "what
-        does this shape actually look like" stays in the shape-specific fields.
-      - **Resize interaction varies by geometry kind, not by individual shape**
-        — `drag-resize.js` needs a small dispatch by geometry kind rather than
-        one universal resize path:
-        - **Line** (2 endpoints): exactly two handles, one per endpoint;
-          dragging either one moves that point directly. This is a new
-          resize mode alongside the existing 4-corner-handle one.
-        - **Box shapes** (rectangle, ellipse, triangle): reuse the existing
-          4-corner-handle resize as-is, free (non-aspect-locked) by default.
-          **Holding Shift constrains width=height** (square for rectangle,
-          circle for ellipse) — one shared constraint helper for both, rather
-          than duplicated logic. Triangle: free resize only for now; an
-          equilateral-triangle Shift-constraint is a possible future nicety,
-          not decided.
-        - **Design correction (same session):** originally sketched
-        polygon/star as `cx, cy, radius` with a single radius-drag handle —
-        but a single scalar radius can only scale uniformly, so it can't
-        express "wider than tall" at all. Corrected to: polygon/star should
-        be **box-based** like ellipse, parameterized as `x, y, width, height`
-        with vertices computed from independent `rx = width/2, ry = height/2`
-        (i.e. `(cx + rx·cos θ, cy + ry·sin θ)` per vertex) rather than one
-        shared radius. This means polygon/star reuse the *same* 4-corner-handle
-        resize as rectangle/ellipse — dragging a corner stretches `rx`/`ry`
-        independently for intentional distortion (a tall narrow star, a
-        squashed pentagon), and **Shift constrains `rx = ry`** for a "regular"
-        symmetric shape, exactly like the square/circle constraint above.
-      - **Net result: geometry only splits into two kinds, not three** —
-        **box-based** (rectangle, ellipse, triangle, and future polygon/star,
-        all sharing one 4-corner resize + optional Shift-constrain
-        implementation) and **endpoint-based** (line, with its own 2-handle
-        resize). The earlier "center+radius, single handle" category turned
-        out to be unnecessary once the distortion requirement was considered
-        — simpler than originally sketched, not more complex.
-      - **Independently draggable vertices (polygon/star), decided
-        2026-08-30:** rather than only symmetric box-corner resize, individual
-        vertices should be directly draggable to create custom/irregular
-        shapes. This reuses the same "drag this one point" mechanism the line
-        needs for its endpoints, generalized from 2 points to N — genuine code
-        reuse, not a parallel implementation. Concretely:
-        - Polygon/star store an explicit `points: [{x,y}, ...]` array (like
-          the line's endpoints, generalized) rather than being purely
-          formula-derived from `rx/ry` at render time.
+        authoritative**, for any non-box shape (lines, and eventually
+        polygon/star's individually-dragged vertex mode below) — e.g. a
+        line's wrapper box is the min/max of its two endpoints. Keeps the
+        existing layering/click-handling/selection machinery unchanged for
+        every shape kind.
+      - **Independently draggable vertices (polygon/star):** rather than only
+        symmetric box-corner resize, individual vertices should be directly
+        draggable for custom/irregular shapes — reuses the same "drag this
+        one point" mechanism the line needs for its endpoints, generalized
+        from 2 points to N. Concretely:
+        - Polygon/star store an explicit `points: [{x,y}, ...]` array once
+          any vertex has been custom-dragged (like the line's endpoints,
+          generalized), rather than being purely formula-derived at render
+          time.
         - One handle per vertex, looped rather than a fixed set of 4.
-        - Dragging a **corner** (bounding-box resize) regenerates *all* points
-          fresh from the `rx/ry` formula — discards any custom vertex
+        - Dragging a **corner** (bounding-box resize) regenerates *all*
+          points fresh from the `rx/ry` formula — discards custom vertex
           tweaks, "resets to regular."
         - Dragging an **individual vertex handle** mutates just that one
-          point — creates an irregular/custom variant.
+          point.
         - No separate "regular vs. custom" mode flag needed — one data
-          structure, two different edit gestures on it.
-      - **Configurable vertex/side count**, decided 2026-08-30: a "Sides"
-        dropdown in `shapePropertiesGroup` when a polygon/star is selected,
-        sensible presets (3, 4, 5, 6, 7, 8, 10, 12) rather than a free numeric
-        input. Changing it is a third trigger for the same "regenerate all
-        points from formula" path used by corner-resize — topology genuinely
-        changes when side count changes, so any custom-dragged vertices are
-        reset, consistent with how corner-resize already behaves. For star
-        specifically, likely also want an inner-radius-ratio control (how
-        deep the notches cut) as a second dropdown with presets (e.g.
-        30/40/50/60%) rather than a slider — same reasoning as the font-size
-        control. Treat as part of the same design/implementation pass, since
-        it's a third caller of the same regeneration logic, not new work.
-      - Rotation (e.g. spinning a star to a different point angle) is a
-        separate future concern from resize — would be an optional additional
-        handle layered on top of whichever resize model applies, not a change
-        to the model itself. Not designed, not currently planned.
-      - **Circle vs. ellipse**: one shape type (`ellipse`), not two — free
-        resize by default, Shift constrains to a true circle. Avoids a
-        separate `circle` type with its own permanently-locked aspect ratio
-        to maintain alongside `ellipse`.
+          structure, two edit gestures on it.
+      - **Configurable vertex/side count:** a "Sides" dropdown in
+        `shapePropertiesGroup` when a polygon/star is selected, sensible
+        presets (3, 4, 5, 6, 7, 8, 10, 12). Changing it is a third trigger
+        for the same "regenerate all points from formula" path used by
+        corner-resize. For star specifically, likely also want an
+        inner-radius-ratio control (how deep the notches cut) as a second
+        dropdown with presets (e.g. 30/40/50/60%) rather than a slider.
+      - **Circle vs. ellipse:** one shape type (`ellipse`), not two — free
+        resize by default, Shift constrains to a true circle.
+      - Rotation is a separate future concern from resize, not designed, not
+        currently planned.
 
       **Still to design:**
       - Rendering as SVG (one `<svg>` per shape element, inside the existing
         `.design-element` wrapper) — chosen over CSS-shape hacks for crisp
         resizing, real stroke control, and because triangles are trivial as
         an SVG `<polygon>` but awkward in pure CSS.
-      - Style fields: `fill`, `fillEnabled` (lines have none; closed shapes may
-        want a "no fill" outline-only option), `stroke`, `strokeWidth`,
-        `strokeEnabled`. Sidebar needs a new `shapePropertiesGroup` — fill
-        swatch picker (hidden for lines), stroke swatch picker, stroke width
-        as a small dropdown (not a slider — same reasoning as the font-size
-        control), reusing the existing palette-swatch UI pattern throughout.
+      - Style fields: `fill`, `fillEnabled` (lines have none), `stroke`,
+        `strokeWidth`, `strokeEnabled`. New `shapePropertiesGroup` sidebar
+        panel — fill swatch picker (hidden for lines), stroke swatch picker,
+        stroke width as a small dropdown (not a slider), reusing the
+        existing palette-swatch UI pattern.
       - Toolbar UI: a row of shape-icon buttons in the "Add Elements"
-        accordion (one per shape kind) rather than a single "Add Shape" button.
+        accordion rather than a single "Add Shape" button.
       - `print.js` needs a shape-rendering branch emitting the same SVG
-        markup, scaled via the existing px-to-mm factor — should be simpler
-        than the image path since SVG has no resolution/compression concerns.
-      - Smart-guides/snapping: box-shaped shapes should fall out for free
-        (same `x/y/width/height` the snap engine already expects); line
-        endpoint snapping will need explicit thought since there's no
+        markup, scaled via the existing px-to-mm factor.
+      - Smart-guides/snapping: box-shaped shapes should fall out for free;
+        line endpoint snapping needs explicit thought since there's no
         width/height to snap against.
-- [ ] **Self-host fonts** — `fonts/` directory exists but is empty. Pick a font
-      set (candidates: reuse the current dropdown list, or expand it now that
-      Google Fonts are usable), download `.woff2` files, add `@font-face` rules
-      to `css/styles.css`, and update the `#propFontFamily` dropdown options
-      + Quill's `font` format whitelist to match.
+- [ ] **Self-host fonts** — `fonts/` directory exists but is empty. Pick a
+      font set, download `.woff2` files, add `@font-face` rules to
+      `css/styles.css`, update the `#propFontFamily` dropdown + Quill's
+      `font` format whitelist to match.
 
 ### Medium Priority
-- [ ] **Card size configuration.** `card-sizes.js` has the data model; needs a
-      size-selector UI (Canvas Settings accordion is the natural home) that
-      calls `setCurrentCardSize()`, plus wiring that selector to actually
-      resize `.canvas-container` and trigger a re-layout — `setCurrentCardSize`
-      currently only stores the selection, per its own code comment.
-- [ ] Placeholder for any styling/UX polish once real testing surfaces issues
-      (e.g. Quill's default snow-theme visual details vs. the app's existing
-      design language).
+- [ ] **Card size configuration.** `card-sizes.js` has the data model; needs
+      a size-selector UI (Canvas Settings accordion) calling
+      `setCurrentCardSize()`, plus wiring it to actually resize
+      `.canvas-container` and trigger a re-layout — currently only stores
+      the selection.
+- [ ] General styling/UX polish pass (e.g. Quill's default snow-theme visual
+      details vs. the app's existing design language) — nothing specific
+      flagged, just worth a look once shapes land.
 
 ---
 
 ## Key Learnings & Principles
 
-- `document.execCommand` is unreliable for partial text selection formatting in
-  current browsers, and even a hand-rolled Range-based
-  `extractContents()`/`insertNode()` approach doesn't scale cleanly to many
-  overlapping styles. A proper data-model-based rich text editor (Quill) avoids
-  the problem at the root rather than patching around it.
-- Image compression must happen at upload time, not just display/render time —
-  constraining display dimensions alone doesn't reduce the actual data payload.
-- Silent failure modes in server-side processing (e.g. missing cache entries)
-  are worth surfacing proactively — or better, eliminated by removing the
-  server round-trip that created the failure mode in the first place.
+- `document.execCommand` is unreliable for partial text selection formatting;
+  even a hand-rolled Range-based approach doesn't scale to many overlapping
+  styles. A proper data-model rich text editor (Quill) avoids the problem at
+  the root.
+- Image compression must happen at upload time, not just display/render time.
+- Silent failure modes in server-side processing are worth surfacing
+  proactively — or better, eliminated by removing the server round-trip that
+  created the failure mode in the first place.
 - Much of the old CSS/architecture complexity stemmed from fighting the GAS
-  iframe sandbox rather than the app's actual requirements — confirmed once
-  removed: the layout code is now substantially simpler with no behavior loss.
-- Plain `<script>` tags across files sharing a global lexical scope is a
-  legitimate lightweight alternative to ES modules for a project this size —
-  avoids build-step/bundler complexity while still allowing a clean file split.
-- Sliders are a poor fit for controls needing precise, specific values (font
-  size); a dropdown of sensible presets is easier to use accurately.
+  iframe sandbox rather than the app's actual requirements.
+- Plain `<script>` tags sharing a global lexical scope is a legitimate
+  lightweight alternative to ES modules for a project this size.
+- Sliders are a poor fit for controls needing precise, specific values
+  (font size, stroke width, vertex count) — a dropdown of sensible presets
+  is easier to use accurately. Applied consistently across the app.
 - **Classic-script forward references are only safe inside function bodies
-  that run later — not in top-level statements that execute immediately at
-  script load.** Found via two real bugs during testing: `propInputs` was
-  referenced at the top level of `text-formatting.js` (an immediate
-  `.addEventListener(...)` call) before it was declared in `main.js`, which
-  loads after; `printBtn` had the identical issue in `print.js`. Both fixed
-  by moving the declaration into the file that needs it at top level, rather
-  than relying on another file's declaration. Rule going forward: any bare
-  `document.getElementById(...).addEventListener(...)` at the top level of a
-  file needs its element declared earlier *in that same file* — cross-file
-  references are only safe when they're resolved inside a function body
-  invoked later (e.g. a click handler's callback), not in the registration
-  call itself.
-- Quill's default `font` format is class-based with a small built-in
-  whitelist (`serif`/`monospace` only) and silently no-ops on anything else —
-  no error, just no visible effect. Caught during testing (font-family
-  dropdown appeared to do nothing). Fixed by registering the style-based
-  `attributors/style/font` attributor instead (same approach already used for
-  `size`), which applies the value as inline `font-family` CSS directly. Any
-  future Quill format that needs to accept values outside its tiny default
-  whitelist will likely need the same style-attributor swap.
+  invoked later — never in a top-level statement that runs immediately at
+  script load.** Caused two real bugs (`propInputs` in `text-formatting.js`,
+  `printBtn` in `print.js`, both referencing a `main.js` declaration that
+  hadn't run yet). Rule: any bare `document.getElementById(...)
+  .addEventListener(...)` at a file's top level needs its element declared
+  earlier *in that same file*.
+- Quill's default formats (`font`, `align`) are often class-based with tiny
+  built-in whitelists, scoped to `.ql-editor` in Quill's own CSS — they can
+  silently no-op (wrong value) or have no visible effect outside Quill's own
+  container (right value, no matching CSS elsewhere) with no error either
+  way. The style-based attributor variants (`attributors/style/*`) avoid
+  both problems by applying inline CSS directly, portable anywhere the HTML
+  ends up. Used for `size`, `font`, and `align`; worth defaulting to for any
+  future Quill format too.
+- Calling `.focus()` immediately after changing an ancestor from
+  `display:none` to `display:block` in the same synchronous script run can
+  silently fail in some browsers — defer by one frame
+  (`requestAnimationFrame`) when focusing something whose container was just
+  revealed.
+- A control retaining browser focus after interaction (Quill, but just as
+  much any `<input>`/`<select>`) can silently break *other* keyboard
+  behavior elsewhere in the app (arrow-key nudge) with no visible error —
+  worth an explicit, general "release focus" step at the start of any
+  unrelated interaction, not a fix scoped to whichever control was noticed
+  first.
+- File System Access API's `createWritable()` truncates the target file
+  immediately, before any write occurs — a failure after that point can't be
+  silently retried via a different save mechanism without real data-loss
+  risk if the retry isn't completed. Distinguish "failed before touching the
+  file" (safe to quietly fall back) from "failed after truncation started"
+  (must warn explicitly) rather than treating all failures the same way.
+- Restricted/embedded browser contexts (e.g. VS Code's built-in dev browser)
+  can fail File System Access API permission checks (`NotAllowedError`) even
+  though the picker dialog itself appears to work — not a bug in the app,
+  worth testing save/load in a real standalone browser tab, not just an
+  embedded dev preview.
+- Drag/resize built on mouse events alone won't work on touch devices;
+  Pointer Events are the standard unification (mouse/touch/pen), but mixing
+  mouse and pointer listeners on the same interaction risks double-firing,
+  since pointer-event-supporting browsers also synthesize the legacy mouse
+  events afterward for compatibility — convert fully, not partially.
 
 ## Tools & Resources
-- **Quill** (rich text editor, sidebar-only, headless toolbar wired to existing
-  UI buttons) — `js/text-formatting.js`
+- **Quill** (rich text editor, sidebar-only, headless toolbar wired to
+  existing UI buttons) — `js/text-formatting.js`
 - Canvas API (image resampling/compression) — `js/elements.js`
-- GitHub Pages (static hosting target, own repo under `uskfarnham`)
-- jsdom (previously used for simulating/isolating client-side bugs pre-migration)
+- GitHub Pages (live: `uskfarnham.github.io/artist-card-creator/`)
+- Pointer Events (drag/resize/touch support) — `js/drag-resize.js`
 
 ## Parked Ideas (not on the backlog, noted for later)
-- Client-side PDF library (jsPDF/html2pdf.js) for a true one-click PDF download
-  without the browser print dialog, if the print-dialog UX ever feels clunky in
-  practice. Current approach (open tab + `window.print()`, "Save as PDF" via the
-  browser's native dialog) was chosen as the lower-risk path for now.
+- Client-side PDF library (jsPDF/html2pdf.js) for a true one-click PDF
+  download without the browser print dialog, if the print-dialog UX ever
+  feels clunky in practice. Current approach (open tab + `window.print()`,
+  "Save as PDF" via the browser's native dialog) was chosen as the
+  lower-risk path for now.

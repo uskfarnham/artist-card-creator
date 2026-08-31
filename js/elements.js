@@ -110,6 +110,109 @@ function createImageElement(src, width, height) {
   pushHistory();
 }
 
+// --- Shape defaults ---------------------------------------------------
+
+const SHAPE_DEFAULT_STYLE = {
+  fill: '#2563eb', fillEnabled: true,
+  stroke: '#1f2937', strokeWidth: 2, strokeEnabled: true
+};
+
+function createShapeElement(shapeKind) {
+  const id = 'el_' + Math.random().toString(36).substr(2, 9);
+  const newElement = {
+    id, type: 'shape', shapeKind,
+    x: 20 + spawnOffset, y: 20 + spawnOffset,
+    width: 120, height: 90,
+    selected: true,
+    zIndex: state.elements.length + 1,
+    style: { ...SHAPE_DEFAULT_STYLE }
+  };
+
+  incrementSpawnOffset();
+  state.elements.forEach(el => el.selected = false);
+  state.elements.push(newElement);
+  renderElementToDOM(newElement);
+  syncSelectionToDOM();
+  pushHistory();
+}
+
+// Builds the inner SVG markup for a shape element from its geometry/style.
+// Stroke is inset by half its width so it isn't clipped at the viewBox edge
+// (SVG strokes are centered on the path by default).
+function buildShapeMarkup(elData) {
+  const { width: w, height: h, style: s } = elData;
+  const sw = s.strokeEnabled ? s.strokeWidth : 0;
+  const fillAttr = s.fillEnabled ? s.fill : 'none';
+  const strokeAttr = s.strokeEnabled ? s.stroke : 'none';
+  const inset = sw / 2;
+
+  switch (elData.shapeKind) {
+    case 'rectangle':
+      return `<rect x="${inset}" y="${inset}" width="${Math.max(0, w - sw)}" height="${Math.max(0, h - sw)}" fill="${fillAttr}" stroke="${strokeAttr}" stroke-width="${sw}" />`;
+    case 'ellipse':
+      return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${Math.max(0, w / 2 - inset)}" ry="${Math.max(0, h / 2 - inset)}" fill="${fillAttr}" stroke="${strokeAttr}" stroke-width="${sw}" />`;
+    case 'triangle': {
+      const points = `${w / 2},${inset} ${w - inset},${h - inset} ${inset},${h - inset}`;
+      return `<polygon points="${points}" fill="${fillAttr}" stroke="${strokeAttr}" stroke-width="${sw}" stroke-linejoin="round" />`;
+    }
+    default:
+      return '';
+  }
+}
+
+// --- Shape Properties Panel ---------------------------------------------
+// Declared here (not main.js) — same forward-reference rule as propInputs
+// in text-formatting.js: these addEventListener calls run at top-level
+// script-load time, so main.js (loaded after) can't declare them first.
+
+const shapeFillEnabled = document.getElementById('shapeFillEnabled');
+const shapeFillColor = document.getElementById('shapeFillColor');
+const shapeStrokeEnabled = document.getElementById('shapeStrokeEnabled');
+const shapeStrokeColor = document.getElementById('shapeStrokeColor');
+const shapeStrokeWidth = document.getElementById('shapeStrokeWidth');
+
+// Populates the panel's controls from a shape element's current style.
+// Called by syncPropertiesPanel (main.js) when a single shape is selected.
+function syncShapePanelToElement(elData) {
+  const s = elData.style;
+  shapeFillEnabled.checked = s.fillEnabled;
+  shapeFillColor.value = s.fill;
+  shapeFillColor.disabled = !s.fillEnabled;
+  shapeStrokeEnabled.checked = s.strokeEnabled;
+  shapeStrokeColor.value = s.stroke;
+  shapeStrokeColor.disabled = !s.strokeEnabled;
+  shapeStrokeWidth.value = s.strokeWidth;
+}
+
+// Applies a control change to the selected shape's style, re-renders it,
+// and pushes history — shared by every control below since they all follow
+// the same read-selected -> mutate -> re-render -> pushHistory pattern.
+function updateSelectedShapeStyle(mutateFn) {
+  const elData = state.elements.find(e => e.selected && e.type === 'shape');
+  if (!elData) return;
+  mutateFn(elData.style);
+  applyStylesToDOM(elData.id);
+  pushHistory();
+}
+
+shapeFillEnabled.addEventListener('change', (e) => {
+  shapeFillColor.disabled = !e.target.checked;
+  updateSelectedShapeStyle(s => s.fillEnabled = e.target.checked);
+});
+shapeFillColor.addEventListener('input', (e) => {
+  updateSelectedShapeStyle(s => s.fill = e.target.value);
+});
+shapeStrokeEnabled.addEventListener('change', (e) => {
+  shapeStrokeColor.disabled = !e.target.checked;
+  updateSelectedShapeStyle(s => s.strokeEnabled = e.target.checked);
+});
+shapeStrokeColor.addEventListener('input', (e) => {
+  updateSelectedShapeStyle(s => s.stroke = e.target.value);
+});
+shapeStrokeWidth.addEventListener('change', (e) => {
+  updateSelectedShapeStyle(s => s.strokeWidth = parseInt(e.target.value));
+});
+
 // --- Deletion -----------------------------------------------------------
 
 function deleteSelectedElements() {
@@ -161,6 +264,11 @@ function renderElementToDOM(elData) {
     }
 
     contentNode.draggable = false;
+
+  } else if (elData.type === 'shape') {
+    contentNode = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    contentNode.classList.add('element-content', 'shape-svg');
+    contentNode.setAttribute('preserveAspectRatio', 'none');
   }
 
   elNode.appendChild(contentNode);
@@ -211,6 +319,12 @@ function applyStylesToDOM(id) {
     contentNode.style.color = s.color;
     contentNode.style.textAlign = s.textAlign;
     contentNode.style.lineHeight = s.lineHeight;
+  }
+
+  if (elData.type === 'shape') {
+    const svgNode = elNode.querySelector('.shape-svg');
+    svgNode.setAttribute('viewBox', `0 0 ${elData.width} ${elData.height}`);
+    svgNode.innerHTML = buildShapeMarkup(elData);
   }
 }
 

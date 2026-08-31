@@ -43,6 +43,11 @@
             <div class="accordion-content">
               <button type="button" class="btn secondary" id="addTextBtn" style="justify-content: flex-start; margin-bottom: 10px;">+ Add Text Block</button>
               <button type="button" class="btn secondary" id="addImageBtn" style="justify-content: flex-start; margin-bottom: 12px;">+ Add Image</button>
+              <div class="toolbar-row" style="margin-top: 4px;">
+                <button type="button" class="toolbar-btn" id="addRectBtn" title="Add Rectangle">▭</button>
+                <button type="button" class="toolbar-btn" id="addEllipseBtn" title="Add Ellipse">◯</button>
+                <button type="button" class="toolbar-btn" id="addTriangleBtn" title="Add Triangle">△</button>
+              </div>
               <input type="file" id="imageUploadInput" accept="image/png, image/jpeg" style="display: none;">
             </div>
           </div>
@@ -275,6 +280,47 @@
               <p style="font-size: 12px; color: var(--text-color); line-height: 1.6; margin: 0;">
                 <strong>Image selected.</strong><br><br>Drag the corner handles on the canvas to resize. The aspect ratio is mathematically locked to prevent distortion.
               </p>
+            </div>
+          </div>
+
+          <!-- SHAPE PROPERTIES -->
+          <div id="shapePropertiesGroup" style="display: none;">
+            <h2>Shape Properties</h2>
+
+            <div class="form-group">
+              <label style="display: flex; justify-content: space-between; align-items: center;">
+                Fill
+                <input type="checkbox" id="shapeFillEnabled" style="width: 16px; height: 16px; accent-color: var(--accent-color);">
+              </label>
+              <div class="color-custom-row">
+                <input type="color" id="shapeFillColor" class="form-control">
+                <span style="font-size: 12px; color: var(--text-color); font-weight: 500;">Fill Color</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label style="display: flex; justify-content: space-between; align-items: center;">
+                Stroke
+                <input type="checkbox" id="shapeStrokeEnabled" style="width: 16px; height: 16px; accent-color: var(--accent-color);">
+              </label>
+              <div class="color-custom-row">
+                <input type="color" id="shapeStrokeColor" class="form-control">
+                <span style="font-size: 12px; color: var(--text-color); font-weight: 500;">Stroke Color</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Stroke Width</label>
+              <select id="shapeStrokeWidth" class="form-control">
+                <option value="1">1px</option>
+                <option value="2">2px</option>
+                <option value="3">3px</option>
+                <option value="4">4px</option>
+                <option value="6">6px</option>
+                <option value="8">8px</option>
+                <option value="10">10px</option>
+                <option value="12">12px</option>
+              </select>
             </div>
           </div>
 
