@@ -30,6 +30,39 @@
  * ---------------------------------------------------------------------------
  */
 
+// Parses a CSS linear-gradient(...) string (as stored in state.background.value)
+// into its angle and an ordered list of {color, offset%} stops. Generic over
+// stop count so it works for both the 2-stop custom gradient builder and the
+// 3-stop preset ("Soft Blush").
+function parseLinearGradient(valueStr) {
+  const angleMatch = valueStr.match(/linear-gradient\(\s*(\d+(?:\.\d+)?)deg\s*,\s*(.+)\)\s*$/i);
+  if (!angleMatch) return null;
+
+  const angleDeg = parseFloat(angleMatch[1]);
+  const stopParts = angleMatch[2].split(',').map(s => s.trim());
+
+  const stops = stopParts.map((part, i) => {
+    const m = part.match(/^(#[0-9a-fA-F]{3,8})\s*(\d+(?:\.\d+)?)%?$/);
+    if (m) return { color: m[1], offset: parseFloat(m[2]) };
+    return { color: part, offset: (i / Math.max(1, stopParts.length - 1)) * 100 };
+  });
+
+  return { angleDeg, stops };
+}
+
+// Replicates the CSS linear-gradient angle-to-line algorithm for a specific
+// box size (per the CSS Images spec) — needed because our cards are NOT
+// square (85x55mm), and a plain SVG rotation assumes a square 0-1 bounding
+// box, which does not match CSS's actual angle behavior on a rectangle.
+function gradientAngleToLine(angleDeg, w, h) {
+  const rad = (angleDeg * Math.PI) / 180;
+  const length = Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad));
+  const cx = w / 2, cy = h / 2;
+  const dx = Math.sin(rad) * (length / 2);
+  const dy = -Math.cos(rad) * (length / 2);
+  return { x1: cx - dx, y1: cy - dy, x2: cx + dx, y2: cy + dy };
+}
+
 function compileToPrintSheet(jsonLayoutState) {
   const cardSize = getCurrentCardSize();
   const pxToMmFactor = getPxToMmFactor();
@@ -145,6 +178,7 @@ function compileToPrintSheet(jsonLayoutState) {
 
   let cardBackgroundCss = 'background: #ffffff;';
   let overlayHtml = '';
+  let gradientDef = null; // parsed once; a unique id is assigned per card below
 
   if (jsonLayoutState.background) {
     const bg = jsonLayoutState.background;
@@ -152,14 +186,54 @@ function compileToPrintSheet(jsonLayoutState) {
 
     overlayHtml = `<div style="position: absolute; top:0; left:0; width:100%; height:100%; background:#ffffff; opacity:${fadeOpacity}; z-index:0; pointer-events:none;"></div>`;
 
-    cardBackgroundCss = bg.type === 'image' ? `background: ${bg.value}; background-size: cover; background-position: center;` : `background: ${bg.value};`;
+    if (bg.type === 'image') {
+      cardBackgroundCss = `background: ${bg.value}; background-size: cover; background-position: center;`;
+    } else if (bg.type === 'gradient' || bg.type === 'custom-gradient') {
+      // Rendered as a per-card inline SVG below instead of a shared CSS
+      // background-image — see the loop below for why.
+      gradientDef = parseLinearGradient(bg.value);
+      cardBackgroundCss = 'background: #ffffff;'; // fallback if parsing ever fails
+    } else {
+      cardBackgroundCss = `background: ${bg.value};`;
+    }
   }
 
   let cardsHtml = '';
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
+      let backgroundLayer = '';
+
+      if (gradientDef) {
+        // Each card gets its OWN <linearGradient> id (cardGrad_R_C), even
+        // though all instances are visually identical. Repeating the exact
+        // same CSS gradient string across many tiled elements on one
+        // printed page is the likely trigger for the faint per-card
+        // banding reported (worse away from the first card, worse on dark
+        // colors) — browsers can apply dithering that isn't fully
+        // independent per element when the identical value repeats many
+        // times on one render surface. A unique id forces an independent
+        // paint per card, matching how shapes/lines (already per-card
+        // inline SVG) don't show this issue.
+        const gradId = `cardGrad_${row}_${col}`;
+        const line = gradientAngleToLine(gradientDef.angleDeg, cardSize.widthMm, cardSize.heightMm);
+        const stopsMarkup = gradientDef.stops
+          .map(s => `<stop offset="${s.offset}%" stop-color="${s.color}" />`)
+          .join('');
+
+        backgroundLayer = `
+          <svg style="position: absolute; top:0; left:0; width:100%; height:100%;" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="${gradId}" gradientUnits="userSpaceOnUse" x1="${line.x1}" y1="${line.y1}" x2="${line.x2}" y2="${line.y2}">
+                ${stopsMarkup}
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="${cardSize.widthMm}mm" height="${cardSize.heightMm}mm" fill="url(#${gradId})" />
+          </svg>`;
+      }
+
       cardsHtml += `
         <div style="position: absolute; left: ${col * cardSize.widthMm}mm; top: ${row * cardSize.heightMm}mm; width: ${cardSize.widthMm}mm; height: ${cardSize.heightMm}mm; overflow: hidden; ${cardBackgroundCss}">
+          ${backgroundLayer}
           ${overlayHtml}
           ${cardInnerHtml}
         </div>`;
