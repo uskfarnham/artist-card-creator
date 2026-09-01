@@ -91,6 +91,55 @@ function compileToPrintSheet(jsonLayoutState) {
           height: ${heightMm}mm;
           object-fit: fill;
         " />`;
+    }  else if (el.type === 'shape' && el.shapeKind === 'line') {
+      // Lines have no width/height box — endpoints scale directly to mm,
+      // and the whole element is positioned at 0,0 with the line drawn in
+      // absolute sheet coordinates (simpler than replicating the padded
+      // bounding-box math from getLineBoundingBox, which exists only to
+      // give the ON-SCREEN wrapper div something to size itself to).
+      const s = el.style || {};
+      const sw = s.strokeEnabled ? (s.strokeWidth * pxToMmFactor) : 0;
+      const strokeAttr = s.strokeEnabled ? s.stroke : 'none';
+      const x1 = (el.x1 * pxToMmFactor).toFixed(4);
+      const y1 = (el.y1 * pxToMmFactor).toFixed(4);
+      const x2 = (el.x2 * pxToMmFactor).toFixed(4);
+      const y2 = (el.y2 * pxToMmFactor).toFixed(4);
+
+      cardInnerHtml += `
+        <svg style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible;">
+          <line x1="${x1}mm" y1="${y1}mm" x2="${x2}mm" y2="${y2}mm" stroke="${strokeAttr}" stroke-width="${sw}mm" stroke-linecap="round" />
+        </svg>`;
+
+    } else if (el.type === 'shape') {
+      // Rectangle/ellipse/triangle — box-based, so this reuses the same
+      // left/top/width/height mm values already computed above for
+      // text/image. viewBox stays in the element's own px space (matches
+      // buildShapeMarkup's coordinate system) and scales to the mm box via
+      // width/height="100%", but stroke-width has to be pre-converted to mm
+      // since SVG's own scaling doesn't know the target is millimeters.
+      const s = el.style || {};
+      const swPx = s.strokeEnabled ? s.strokeWidth : 0;
+      const swMm = (swPx * pxToMmFactor).toFixed(4);
+      const fillAttr = s.fillEnabled ? s.fill : 'none';
+      const strokeAttr = s.strokeEnabled ? s.stroke : 'none';
+      const insetPx = swPx / 2;
+      const w = el.width, h = el.height;
+
+      let shapeMarkup = '';
+      if (el.shapeKind === 'rectangle') {
+        shapeMarkup = `<rect x="${insetPx}" y="${insetPx}" width="${Math.max(0, w - swPx)}" height="${Math.max(0, h - swPx)}" fill="${fillAttr}" stroke="${strokeAttr}" vector-effect="non-scaling-stroke" />`;
+      } else if (el.shapeKind === 'ellipse') {
+        shapeMarkup = `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${Math.max(0, w / 2 - insetPx)}" ry="${Math.max(0, h / 2 - insetPx)}" fill="${fillAttr}" stroke="${strokeAttr}" vector-effect="non-scaling-stroke" />`;
+      } else if (el.shapeKind === 'triangle') {
+        const points = `${w / 2},${insetPx} ${w - insetPx},${h - insetPx} ${insetPx},${h - insetPx}`;
+        shapeMarkup = `<polygon points="${points}" fill="${fillAttr}" stroke="${strokeAttr}" stroke-linejoin="round" vector-effect="non-scaling-stroke" />`;
+      }
+
+      cardInnerHtml += `
+        <svg style="position: absolute; left: ${leftMm}mm; top: ${topMm}mm; width: ${widthMm}mm; height: ${heightMm}mm;" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+          <style>* { stroke-width: ${swMm}mm; }</style>
+          ${shapeMarkup}
+        </svg>`;
     }
   });
 
