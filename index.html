@@ -17,9 +17,7 @@
     <header class="topbar">
       <div class="brand-title">
         Artist Card Creator
-        <span class="brand-subtitle">Standard UK/EU Business Card Designer (85x55mm)</span>
-        <!-- NOTE: subtitle format text is static for now — will become dynamic
-             once card-sizes.js adds a size selector (see PROJECT_STATUS.md) -->
+        <span class="brand-subtitle" id="cardSizeSubtitle">UK / EU Standard (85 x 55mm)</span>
       </div>
       <div class="topbar-actions">
         <button type="button" class="btn secondary" id="undoBtn" title="Undo (Ctrl+Z)" style="width: auto;">↶ Undo</button>
@@ -57,6 +55,10 @@
           <div class="accordion-item active">
             <button type="button" class="accordion-trigger">⚙️ Canvas Settings <span>▼</span></button>
             <div class="accordion-content">
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label>Card Size</label>
+                <select id="cardSizeSelect" class="form-control"></select>
+              </div>
               <div class="form-group" style="margin-bottom: 16px;">
                 <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                   Workspace Zoom

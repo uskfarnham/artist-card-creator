@@ -32,7 +32,6 @@ function drawGuide(axis, position) {
 }
 
 function getSnapTargets() {
-  // Extract unscaled canvas boundaries rather than scaled client dimensions
   const currentZoomSlider = document.getElementById('canvasZoomSlider');
   const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
 
@@ -45,7 +44,7 @@ function getSnapTargets() {
 
   state.elements.forEach(el => {
     if (!el.selected) {
-      const box = getElementBoundingBox(el); // was: el.x / el.width directly
+      const box = getElementBoundingBox(el);
       guidesX.push(box.x, box.x + box.width / 2, box.x + box.width);
       guidesY.push(box.y, box.y + box.height / 2, box.y + box.height);
     }
@@ -53,7 +52,10 @@ function getSnapTargets() {
 
   let gridStep = 0;
   if (gridSnapToggle.checked) {
-    gridStep = (layoutWidth / 85) * 5; // precise 5mm grid under any transform
+    // Fixed 5mm grid in px terms — PX_PER_MM (card-sizes.js) is a single
+    // constant shared by every card size, so this no longer needs to
+    // derive a per-size ratio from the current canvas width at all.
+    gridStep = 5 * PX_PER_MM;
   }
 
   return { guidesX, guidesY, gridStep };

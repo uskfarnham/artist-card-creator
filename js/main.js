@@ -369,5 +369,6 @@ function syncPropertiesPanel() {
 
 // --- Init ---------------------------------------------------------------
 
-renderAllPalettes(); // was: renderPalette();
+applyCardSizeToCanvas(); // sets initial pixel size/subtitle from card-sizes.js
+renderAllPalettes();
 pushHistory();

@@ -66,13 +66,14 @@ function gradientAngleToLine(angleDeg, w, h) {
 function compileToPrintSheet(jsonLayoutState) {
   const cardSize = getCurrentCardSize();
   const pxToMmFactor = getPxToMmFactor();
+  const isSingleSheet = cardSize.printMode === 'single-sheet';
 
-  // Usable imposition area inside the A4 sheet's margins (see .sheet/.grid
-  // dimensions below: 170mm x 275mm after the 20mm/11mm page padding).
-  const GRID_WIDTH_MM = 170;
-  const GRID_HEIGHT_MM = 275;
-  const cols = Math.max(1, Math.floor(GRID_WIDTH_MM / cardSize.widthMm));
-  const rows = Math.max(1, Math.floor(GRID_HEIGHT_MM / cardSize.heightMm));
+  // Usable imposition area inside the A4 sheet's margins — irrelevant in
+  // single-sheet mode, where the "grid" is just the one card.
+  const GRID_WIDTH_MM = isSingleSheet ? cardSize.widthMm : 170;
+  const GRID_HEIGHT_MM = isSingleSheet ? cardSize.heightMm : 275;
+  const cols = isSingleSheet ? 1 : Math.max(1, Math.floor(GRID_WIDTH_MM / cardSize.widthMm));
+  const rows = isSingleSheet ? 1 : Math.max(1, Math.floor(GRID_HEIGHT_MM / cardSize.heightMm));
 
   let cardInnerHtml = '';
 
@@ -240,59 +241,45 @@ function compileToPrintSheet(jsonLayoutState) {
     }
   }
 
-  // Crop marks at every card boundary, including the outer edges.
+// Crop marks only mean something when multiple cards share one sheet —
+  // in single-sheet mode the card's own edge already is the cut line, so
+  // marks would just be redundant lines sitting on the page border.
   let cropMarksHtml = '';
-  for (let c = 0; c <= cols; c++) {
-    const x = c * cardSize.widthMm;
-    cropMarksHtml += `<div class="crop-mark-v" style="left: ${x}mm;"></div>`;
-  }
-  for (let r = 0; r <= rows; r++) {
-    const y = r * cardSize.heightMm;
-    cropMarksHtml += `<div class="crop-mark-h" style="top: ${y}mm;"></div>`;
+  if (!isSingleSheet) {
+    for (let c = 0; c <= cols; c++) {
+      cropMarksHtml += `<div class="crop-mark-v" style="left: ${c * cardSize.widthMm}mm;"></div>`;
+    }
+    for (let r = 0; r <= rows; r++) {
+      cropMarksHtml += `<div class="crop-mark-h" style="top: ${r * cardSize.heightMm}mm;"></div>`;
+    }
   }
 
-  return `<!DOCTYPE html>
+  const pageSizeCss = isSingleSheet ? `${cardSize.widthMm}mm ${cardSize.heightMm}mm` : 'A4';
+  const sheetWidthMm = isSingleSheet ? cardSize.widthMm : 210;
+  const sheetHeightMm = isSingleSheet ? cardSize.heightMm : 297;
+  const sheetPadTop = isSingleSheet ? 0 : 11;
+  const sheetPadLeft = isSingleSheet ? 0 : 20;
+
+ return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>A4 Print Sheet - Imposed Card Matrix</title>
+  <title>Print Sheet</title>
   <style>
-    @page { size: A4; margin: 0; }
+    @page { size: ${pageSizeCss}; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #ffffff;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
+    body { background: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .sheet {
-      width: 210mm;
-      height: 297mm;
+      width: ${sheetWidthMm}mm;
+      height: ${sheetHeightMm}mm;
       position: relative;
       page-break-inside: avoid;
-      padding-top: 11mm;
-      padding-left: 20mm;
+      padding-top: ${sheetPadTop}mm;
+      padding-left: ${sheetPadLeft}mm;
     }
-    .grid {
-      width: ${GRID_WIDTH_MM}mm;
-      height: ${GRID_HEIGHT_MM}mm;
-      position: relative;
-    }
-    .crop-mark-v {
-      position: absolute;
-      width: 0;
-      border-left: 0.5pt dashed #999999;
-      top: -5mm;
-      bottom: -5mm;
-      z-index: 9999;
-    }
-    .crop-mark-h {
-      position: absolute;
-      height: 0;
-      border-top: 0.5pt dashed #999999;
-      left: -5mm;
-      right: -5mm;
-      z-index: 9999;
-    }
+    .grid { width: ${GRID_WIDTH_MM}mm; height: ${GRID_HEIGHT_MM}mm; position: relative; }
+    .crop-mark-v { position: absolute; width: 0; border-left: 0.5pt dashed #999999; top: -5mm; bottom: -5mm; z-index: 9999; }
+    .crop-mark-h { position: absolute; height: 0; border-top: 0.5pt dashed #999999; left: -5mm; right: -5mm; z-index: 9999; }
   </style>
 </head>
 <body>
@@ -303,15 +290,13 @@ function compileToPrintSheet(jsonLayoutState) {
     </div>
   </div>
   <script>
-    if (document.readyState === 'complete') {
-      window.print();
-    } else {
-      window.addEventListener('DOMContentLoaded', () => window.print());
-    }
+    if (document.readyState === 'complete') { window.print(); }
+    else { window.addEventListener('DOMContentLoaded', () => window.print()); }
   <\/script>
 </body>
 </html>`;
 }
+
 
 const printBtn = document.getElementById('printBtn');
 
