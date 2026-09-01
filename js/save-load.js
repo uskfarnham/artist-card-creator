@@ -17,7 +17,12 @@ async function saveStateToDisk() {
   state.elements.forEach(el => el.selected = false);
   syncSelectionToDOM();
 
-  const dataStr = JSON.stringify(state, null, 2);
+  // cardSizeKey is a sibling field, not folded into `state` itself — state
+  // stays the single live source of truth for elements/palette/background,
+  // and card size is exported alongside it rather than reshaping state's
+  // structure just to fit this one extra value in.
+  const exportPayload = { ...state, cardSizeKey: currentCardSizeKey };
+  const dataStr = JSON.stringify(exportPayload, null, 2);
 
   if (window.showSaveFilePicker) {
     let writable = null;
@@ -107,12 +112,23 @@ function loadStateFromDisk(e) {
 
         state.elements.forEach(el => renderElementToDOM(el));
 
+        // Restore card size selection. Older save files (from before card
+        // sizes existed) won't have this field — fall back to uk-eu rather
+        // than leaving whatever size happens to be active in the current
+        // session, which was the reported bug.
+        const targetCardSizeKey = (loadedState.cardSizeKey && CARD_SIZES[loadedState.cardSizeKey])
+          ? loadedState.cardSizeKey
+          : 'uk-eu';
+        currentCardSizeKey = targetCardSizeKey;
+        cardSizeSelect.value = targetCardSizeKey;
+        // Resizes the canvas and re-renders the elements just loaded above
+        // at the correct dimensions. No rescale needed here (unlike the
+        // dropdown's own setCurrentCardSize) — these element coordinates
+        // were saved AT this exact size already, so they're already correct.
+        applyCardSizeToCanvas();
+
         // Background restoration (including the fade overlay div) must come
-        // AFTER the cleanup loop above, not before — that loop removes any
-        // canvas child that isn't the safe-zone/guides layer, which
-        // previously included the overlay div if it was created first here,
-        // silently discarding the fade effect even though state.background
-        // itself was correctly loaded.
+        // AFTER the cleanup loop above, not before — ...
         if (loadedState.background) {
           syncBackgroundControlsToState(); // background.js
         }

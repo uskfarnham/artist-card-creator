@@ -196,18 +196,18 @@ function compileToPrintSheet(jsonLayoutState) {
       const w = el.width, h = el.height;
 
       let shapeMarkup = '';
+      const strokeStyleAttr = `style="stroke-width:${swMm}mm"`;
       if (el.shapeKind === 'rectangle') {
-        shapeMarkup = `<rect x="${insetPx}" y="${insetPx}" width="${Math.max(0, w - swPx)}" height="${Math.max(0, h - swPx)}" fill="${fillAttr}" stroke="${strokeAttr}" vector-effect="non-scaling-stroke" />`;
+        shapeMarkup = `<rect x="${insetPx}" y="${insetPx}" width="${Math.max(0, w - swPx)}" height="${Math.max(0, h - swPx)}" fill="${fillAttr}" stroke="${strokeAttr}" vector-effect="non-scaling-stroke" ${strokeStyleAttr} />`;
       } else if (el.shapeKind === 'ellipse') {
-        shapeMarkup = `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${Math.max(0, w / 2 - insetPx)}" ry="${Math.max(0, h / 2 - insetPx)}" fill="${fillAttr}" stroke="${strokeAttr}" vector-effect="non-scaling-stroke" />`;
+        shapeMarkup = `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${Math.max(0, w / 2 - insetPx)}" ry="${Math.max(0, h / 2 - insetPx)}" fill="${fillAttr}" stroke="${strokeAttr}" vector-effect="non-scaling-stroke" ${strokeStyleAttr} />`;
       } else if (el.shapeKind === 'triangle') {
         const points = `${w / 2},${insetPx} ${w - insetPx},${h - insetPx} ${insetPx},${h - insetPx}`;
-        shapeMarkup = `<polygon points="${points}" fill="${fillAttr}" stroke="${strokeAttr}" stroke-linejoin="round" vector-effect="non-scaling-stroke" />`;
+        shapeMarkup = `<polygon points="${points}" fill="${fillAttr}" stroke="${strokeAttr}" stroke-linejoin="round" vector-effect="non-scaling-stroke" ${strokeStyleAttr} />`;
       }
 
       cardInnerHtml += `
         <svg style="position: absolute; left: ${leftMm}mm; top: ${topMm}mm; width: ${widthMm}mm; height: ${heightMm}mm;" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-          <style>* { stroke-width: ${swMm}mm; }</style>
           ${shapeMarkup}
         </svg>`;
     }
