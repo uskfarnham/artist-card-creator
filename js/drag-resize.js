@@ -45,8 +45,9 @@ function getSnapTargets() {
 
   state.elements.forEach(el => {
     if (!el.selected) {
-      guidesX.push(el.x, el.x + el.width / 2, el.x + el.width);
-      guidesY.push(el.y, el.y + el.height / 2, el.y + el.height);
+      const box = getElementBoundingBox(el); // was: el.x / el.width directly
+      guidesX.push(box.x, box.x + box.width / 2, box.x + box.width);
+      guidesY.push(box.y, box.y + box.height / 2, box.y + box.height);
     }
   });
 
@@ -244,9 +245,23 @@ function initDrag(e, id) {
   const startX = e.clientX;
   const startY = e.clientY;
 
-  const initialPositions = selectedElements.map(el => ({ id: el.id, x: el.x, y: el.y }));
+  // Track each selected element's own native geometry — lines store
+  // endpoints (x1,y1,x2,y2), everything else stores x,y. Recording which
+  // shape each one is up front means onPointerMove doesn't need to
+  // re-check el.type/shapeKind on every single move event.
+  const initialGeometry = selectedElements.map(el => {
+    if (el.type === 'shape' && el.shapeKind === 'line') {
+      return { id: el.id, isLine: true, x1: el.x1, y1: el.y1, x2: el.x2, y2: el.y2 };
+    }
+    return { id: el.id, isLine: false, x: el.x, y: el.y };
+  });
+
   const primaryEl = state.elements.find(e => e.id === id);
-  const initialPrimaryPos = initialPositions.find(p => p.id === id);
+  // The primary element's bounding box drives snapping for the whole
+  // selection — getElementBoundingBox (elements.js) returns primaryEl's
+  // own x/y/width/height for text/image/box-shapes, or the derived box
+  // for a line, so this works whichever kind was actually clicked.
+  const primaryBox = getElementBoundingBox(primaryEl);
 
   document.body.classList.add('is-dragging');
   activeInteraction = 'drag';
@@ -266,18 +281,25 @@ function initDrag(e, id) {
     const dx = (ev.clientX - startX) / zoomScale;
     const dy = (ev.clientY - startY) / zoomScale;
 
-    let proposedX = initialPrimaryPos.x + dx;
-    let proposedY = initialPrimaryPos.y + dy;
+    const proposedX = primaryBox.x + dx;
+    const proposedY = primaryBox.y + dy;
 
-    const { finalX, finalY } = snapDrag(proposedX, proposedY, primaryEl.width, primaryEl.height);
+    const { finalX, finalY } = snapDrag(proposedX, proposedY, primaryBox.width, primaryBox.height);
 
-    const actualDx = finalX - initialPrimaryPos.x;
-    const actualDy = finalY - initialPrimaryPos.y;
+    const actualDx = finalX - primaryBox.x;
+    const actualDy = finalY - primaryBox.y;
 
-    initialPositions.forEach(pos => {
+    initialGeometry.forEach(pos => {
       const el = state.elements.find(e => e.id === pos.id);
-      el.x = pos.x + actualDx;
-      el.y = pos.y + actualDy;
+      if (pos.isLine) {
+        el.x1 = pos.x1 + actualDx;
+        el.y1 = pos.y1 + actualDy;
+        el.x2 = pos.x2 + actualDx;
+        el.y2 = pos.y2 + actualDy;
+      } else {
+        el.x = pos.x + actualDx;
+        el.y = pos.y + actualDy;
+      }
       applyStylesToDOM(el.id);
     });
   }
@@ -391,6 +413,75 @@ function initResize(e, id, handlePos) {
   function endInteraction(ev) {
     if (ev.pointerId !== e.pointerId) return;
     document.body.classList.remove(cursorClass);
+    captureTarget.removeEventListener('pointermove', onPointerMove);
+    captureTarget.removeEventListener('pointerup', endInteraction);
+    captureTarget.removeEventListener('pointercancel', endInteraction);
+    try { captureTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    clearSmartGuides();
+    pushHistory();
+    activeInteraction = null;
+  }
+
+  captureTarget.addEventListener('pointermove', onPointerMove);
+  captureTarget.addEventListener('pointerup', endInteraction);
+  captureTarget.addEventListener('pointercancel', endInteraction);
+}
+
+// Lines don't fit the 4-corner resize model (no width/height) — each
+// endpoint drags independently. This generalizes later to N vertices for
+// polygon/star per PROJECT_STATUS.md ("reuses the same 'drag this one
+// point' mechanism the line needs for its endpoints").
+function initLineEndpointDrag(e, id, which) {
+  if (activeInteraction) return;
+  releaseFocusForCanvasInteraction();
+  e.preventDefault();
+  e.stopPropagation();
+
+  state.elements.forEach(el => el.selected = (el.id === id));
+  syncSelectionToDOM();
+
+  const elData = state.elements.find(el => el.id === id);
+  if (!elData) return;
+
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const initialX = which === 'start' ? elData.x1 : elData.x2;
+  const initialY = which === 'start' ? elData.y1 : elData.y2;
+
+  document.body.classList.add('is-dragging');
+  activeInteraction = 'line-endpoint';
+
+  const captureTarget = e.currentTarget;
+  captureTarget.setPointerCapture(e.pointerId);
+
+  function onPointerMove(ev) {
+    if (ev.pointerId !== e.pointerId) return;
+    const currentZoomSlider = document.getElementById('canvasZoomSlider');
+    const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
+
+    const dx = (ev.clientX - startX) / zoomScale;
+    const dy = (ev.clientY - startY) / zoomScale;
+    const proposedX = initialX + dx;
+    const proposedY = initialY + dy;
+
+    // A single point has no width/height to offer edge/center/edge snap
+    // alternatives the way a box does — just the raw point against guides/grid.
+    const { guidesX, guidesY, gridStep } = getSnapTargets();
+    clearSmartGuides();
+    const snapX = evaluateSnap(proposedX, guidesX, gridStep);
+    const snapY = evaluateSnap(proposedY, guidesY, gridStep);
+    if (snapX.isGuide && snapX.snapped !== proposedX) drawGuide('x', snapX.snapped);
+    if (snapY.isGuide && snapY.snapped !== proposedY) drawGuide('y', snapY.snapped);
+
+    if (which === 'start') { elData.x1 = snapX.snapped; elData.y1 = snapY.snapped; }
+    else { elData.x2 = snapX.snapped; elData.y2 = snapY.snapped; }
+
+    applyStylesToDOM(id);
+  }
+
+  function endInteraction(ev) {
+    if (ev.pointerId !== e.pointerId) return;
+    document.body.classList.remove('is-dragging');
     captureTarget.removeEventListener('pointermove', onPointerMove);
     captureTarget.removeEventListener('pointerup', endInteraction);
     captureTarget.removeEventListener('pointercancel', endInteraction);

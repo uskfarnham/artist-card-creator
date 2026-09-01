@@ -43,11 +43,12 @@
             <div class="accordion-content">
               <button type="button" class="btn secondary" id="addTextBtn" style="justify-content: flex-start; margin-bottom: 10px;">+ Add Text Block</button>
               <button type="button" class="btn secondary" id="addImageBtn" style="justify-content: flex-start; margin-bottom: 12px;">+ Add Image</button>
-              <div class="toolbar-row" style="margin-top: 4px;">
-                <button type="button" class="toolbar-btn" id="addRectBtn" title="Add Rectangle">▭</button>
-                <button type="button" class="toolbar-btn" id="addEllipseBtn" title="Add Ellipse">◯</button>
-                <button type="button" class="toolbar-btn" id="addTriangleBtn" title="Add Triangle">△</button>
-              </div>
+            <div class="toolbar-row" style="margin-top: 4px;">
+              <button type="button" class="toolbar-btn" id="addRectBtn" title="Add Rectangle">▭</button>
+              <button type="button" class="toolbar-btn" id="addEllipseBtn" title="Add Ellipse">◯</button>
+              <button type="button" class="toolbar-btn" id="addTriangleBtn" title="Add Triangle">△</button>
+              <button type="button" class="toolbar-btn" id="addLineBtn" title="Add Line">╱</button>
+            </div>
               <input type="file" id="imageUploadInput" accept="image/png, image/jpeg" style="display: none;">
             </div>
           </div>
@@ -287,7 +288,7 @@
           <div id="shapePropertiesGroup" style="display: none;">
             <h2>Shape Properties</h2>
 
-            <div class="form-group">
+            <div class="form-group" id="shapeFillGroup">
               <label style="display: flex; justify-content: space-between; align-items: center;">
                 Fill
                 <input type="checkbox" id="shapeFillEnabled" style="width: 16px; height: 16px; accent-color: var(--accent-color);">
@@ -327,7 +328,7 @@
               </select>
             </div>
 
-            <div class="tooltip-container" style="font-size: 13px; cursor: pointer; display: flex; align-items: center; margin-bottom: 12px; color: var(--text-color); font-weight: 500;">
+            <div class="tooltip-container" id="shapeLockAspectGroup" style="font-size: 13px; cursor: pointer; display: flex; align-items: center; margin-bottom: 12px; color: var(--text-color); font-weight: 500;">
               <input type="checkbox" id="shapeLockAspect" style="margin-right: 8px; width: 16px; height: 16px; accent-color: var(--accent-color);">
               Lock Proportions
               <span class="info-icon">i</span>

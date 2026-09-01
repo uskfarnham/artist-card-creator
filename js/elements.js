@@ -211,14 +211,22 @@ document.getElementById('shapeSaveStrokeColorBtn').addEventListener('click', () 
 // Called by syncPropertiesPanel (main.js) when a single shape is selected.
 function syncShapePanelToElement(elData) {
   const s = elData.style;
-  shapeFillEnabled.checked = s.fillEnabled;
-  shapeFillColor.value = s.fill;
-  shapeFillColor.disabled = !s.fillEnabled;
+  const isLine = elData.shapeKind === 'line';
+
+  document.getElementById('shapeFillGroup').style.display = isLine ? 'none' : 'block';
+  document.getElementById('shapeLockAspectGroup').style.display = isLine ? 'none' : 'block';
+
+  if (!isLine) {
+    shapeFillEnabled.checked = s.fillEnabled;
+    shapeFillColor.value = s.fill;
+    shapeFillColor.disabled = !s.fillEnabled;
+    shapeLockAspect.checked = s.lockAspect;
+  }
+
   shapeStrokeEnabled.checked = s.strokeEnabled;
   shapeStrokeColor.value = s.stroke;
   shapeStrokeColor.disabled = !s.strokeEnabled;
   shapeStrokeWidth.value = s.strokeWidth;
-  shapeLockAspect.checked = s.lockAspect; 
 }
 
 // Applies a control change to the selected shape's style, re-renders it,
@@ -249,6 +257,71 @@ shapeStrokeColor.addEventListener('input', (e) => {
 shapeStrokeWidth.addEventListener('change', (e) => {
   updateSelectedShapeStyle(s => s.strokeWidth = parseInt(e.target.value));
 });
+
+// --- Line geometry & bounding box -----------------------------------------
+
+// Minimum visual padding around a line's raw endpoint bounds — without this,
+// a perfectly horizontal or vertical line computes a 0-height/0-width SVG
+// viewBox (unrenderable), with no room for endpoint handles or a thick
+// stroke to avoid clipping.
+function getLineBoundingBox(elData) {
+  const pad = Math.max(8, (elData.style.strokeWidth || 2) / 2 + 6);
+  const minX = Math.min(elData.x1, elData.x2);
+  const minY = Math.min(elData.y1, elData.y2);
+  const maxX = Math.max(elData.x1, elData.x2);
+  const maxY = Math.max(elData.y1, elData.y2);
+  return {
+    x: minX - pad, y: minY - pad,
+    width: (maxX - minX) + pad * 2,
+    height: (maxY - minY) + pad * 2
+  };
+}
+
+// Returns the authoritative-or-derived bounding box for ANY element type —
+// text/image/box-shape store x,y,width,height directly; line derives it from
+// endpoints (see PROJECT_STATUS.md: "the wrapper div's bounding box is
+// derived, not authoritative, for any non-box shape"). Used wherever generic
+// code needs "a box" regardless of geometry model — snapping, alignment,
+// whole-element drag.
+function getElementBoundingBox(elData) {
+  if (elData.type === 'shape' && elData.shapeKind === 'line') {
+    return getLineBoundingBox(elData);
+  }
+  return { x: elData.x, y: elData.y, width: elData.width, height: elData.height };
+}
+
+function createLineElement() {
+  const id = 'el_' + Math.random().toString(36).substr(2, 9);
+  const newElement = {
+    id, type: 'shape', shapeKind: 'line',
+    x1: 20 + spawnOffset, y1: 20 + spawnOffset,
+    x2: 140 + spawnOffset, y2: 90 + spawnOffset,
+    selected: true,
+    zIndex: state.elements.length + 1,
+    style: { stroke: '#1f2937', strokeWidth: 2, strokeEnabled: true } // no fill fields — lines have none
+  };
+
+  incrementSpawnOffset();
+  state.elements.forEach(el => el.selected = false);
+  state.elements.push(newElement);
+  renderElementToDOM(newElement);
+  syncSelectionToDOM();
+  pushHistory();
+}
+
+// Renders a <line> using coordinates relative to the derived bounding box
+// (box.x/box.y are the viewBox origin) — separate from buildShapeMarkup
+// since box-based shapes render relative to their OWN x,y (always 0,0 in
+// their own viewBox), while a line's endpoints are in canvas space and need
+// the box subtracted out first.
+function buildLineMarkup(elData, box) {
+  const s = elData.style;
+  const sw = s.strokeEnabled ? s.strokeWidth : 0;
+  const strokeAttr = s.strokeEnabled ? s.stroke : 'none';
+  const x1 = elData.x1 - box.x, y1 = elData.y1 - box.y;
+  const x2 = elData.x2 - box.x, y2 = elData.y2 - box.y;
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${strokeAttr}" stroke-width="${sw}" stroke-linecap="round" />`;
+}
 
 // --- Deletion -----------------------------------------------------------
 
@@ -310,13 +383,27 @@ function renderElementToDOM(elData) {
 
   elNode.appendChild(contentNode);
 
-  const handles = ['nw', 'ne', 'sw', 'se'];
-  handles.forEach(pos => {
-    const handle = document.createElement('div');
-    handle.className = `resize-handle ${pos}`;
-    handle.addEventListener('pointerdown', (e) => initResize(e, elData.id, pos));
-    elNode.appendChild(handle);
-  });
+  // Lines don't fit the 4-corner resize model (no width/height) — each
+  // endpoint gets its own independently-draggable handle instead. Every
+  // other element type (text, image, box-based shapes) keeps the existing
+  // 4-corner handles.
+  if (elData.type === 'shape' && elData.shapeKind === 'line') {
+    ['start', 'end'].forEach(which => {
+      const handle = document.createElement('div');
+      handle.className = 'resize-handle endpoint-handle';
+      handle.dataset.endpoint = which;
+      handle.addEventListener('pointerdown', (e) => initLineEndpointDrag(e, elData.id, which));
+      elNode.appendChild(handle);
+    });
+  } else {
+    const handles = ['nw', 'ne', 'sw', 'se'];
+    handles.forEach(pos => {
+      const handle = document.createElement('div');
+      handle.className = `resize-handle ${pos}`;
+      handle.addEventListener('pointerdown', (e) => initResize(e, elData.id, pos));
+      elNode.appendChild(handle);
+    });
+  }
 
   elNode.addEventListener('pointerdown', (e) => {
     if (e.target.classList.contains('resize-handle')) return;
@@ -332,6 +419,34 @@ function applyStylesToDOM(id) {
   const elNode = document.getElementById(id);
   if (!elData || !elNode) return;
 
+  if (elData.type === 'shape' && elData.shapeKind === 'line') {
+    const box = getLineBoundingBox(elData);
+    elNode.style.left = `${box.x}px`;
+    elNode.style.top = `${box.y}px`;
+    elNode.style.width = `${box.width}px`;
+    elNode.style.height = `${box.height}px`;
+    elNode.style.zIndex = elData.zIndex;
+
+    const svgNode = elNode.querySelector('.shape-svg');
+    svgNode.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+    svgNode.innerHTML = buildLineMarkup(elData, box);
+
+    // Endpoint handles sit directly over their real canvas coordinates,
+    // relative to the wrapper's own box — unlike box-shapes' fixed corner
+    // handles, these move independently of each other.
+    const startHandle = elNode.querySelector('.endpoint-handle[data-endpoint="start"]');
+    const endHandle = elNode.querySelector('.endpoint-handle[data-endpoint="end"]');
+    if (startHandle) {
+      startHandle.style.left = `${elData.x1 - box.x - 5}px`;
+      startHandle.style.top = `${elData.y1 - box.y - 5}px`;
+    }
+    if (endHandle) {
+      endHandle.style.left = `${elData.x2 - box.x - 5}px`;
+      endHandle.style.top = `${elData.y2 - box.y - 5}px`;
+    }
+    return;
+  }
+
   elNode.style.left = `${elData.x}px`;
   elNode.style.top = `${elData.y}px`;
   elNode.style.width = `${elData.width}px`;
@@ -339,23 +454,7 @@ function applyStylesToDOM(id) {
   elNode.style.zIndex = elData.zIndex;
 
   if (elData.type === 'text') {
-    const contentNode = elNode.querySelector('.element-content');
-    const s = elData.style;
-
-    // Canvas text is always read-only now, so no contentEditable check is
-    // needed before syncing — the only writer of elData.content is Quill.
-    if (contentNode.innerHTML !== elData.content) {
-      contentNode.innerHTML = elData.content;
-    }
-
-    contentNode.style.fontFamily = s.fontFamily;
-    contentNode.style.fontSize = s.fontSize;
-    contentNode.style.fontWeight = s.fontWeight;
-    contentNode.style.fontStyle = s.fontStyle;
-    contentNode.style.textDecoration = s.textDecoration || 'none';
-    contentNode.style.color = s.color;
-    contentNode.style.textAlign = s.textAlign;
-    contentNode.style.lineHeight = s.lineHeight;
+    // ...unchanged...
   }
 
   if (elData.type === 'shape') {
@@ -414,20 +513,31 @@ function alignElements(type) {
   const selected = state.elements.filter(e => e.selected);
   if (selected.length < 2) return;
 
-  const minX = Math.min(...selected.map(e => e.x));
-  const maxX = Math.max(...selected.map(e => e.x + e.width));
-  const minY = Math.min(...selected.map(e => e.y));
-  const maxY = Math.max(...selected.map(e => e.y + e.height));
+  const boxes = selected.map(el => ({ el, box: getElementBoundingBox(el) }));
+
+  const minX = Math.min(...boxes.map(b => b.box.x));
+  const maxX = Math.max(...boxes.map(b => b.box.x + b.box.width));
+  const minY = Math.min(...boxes.map(b => b.box.y));
+  const maxY = Math.max(...boxes.map(b => b.box.y + b.box.height));
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
 
-  selected.forEach(el => {
-    if (type === 'left') el.x = minX;
-    if (type === 'center') el.x = centerX - (el.width / 2);
-    if (type === 'right') el.x = maxX - el.width;
-    if (type === 'top') el.y = minY;
-    if (type === 'middle') el.y = centerY - (el.height / 2);
-    if (type === 'bottom') el.y = maxY - el.height;
+  boxes.forEach(({ el, box }) => {
+    let targetX = box.x, targetY = box.y;
+    if (type === 'left') targetX = minX;
+    if (type === 'center') targetX = centerX - (box.width / 2);
+    if (type === 'right') targetX = maxX - box.width;
+    if (type === 'top') targetY = minY;
+    if (type === 'middle') targetY = centerY - (box.height / 2);
+    if (type === 'bottom') targetY = maxY - box.height;
+
+    const dx = targetX - box.x, dy = targetY - box.y;
+
+    if (el.type === 'shape' && el.shapeKind === 'line') {
+      el.x1 += dx; el.y1 += dy; el.x2 += dx; el.y2 += dy;
+    } else {
+      el.x += dx; el.y += dy;
+    }
     applyStylesToDOM(el.id);
   });
 

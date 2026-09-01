@@ -127,6 +127,7 @@ imageUploadInput.addEventListener('change', handleImageUpload);
 document.getElementById('addRectBtn').addEventListener('click', () => createShapeElement('rectangle'));
 document.getElementById('addEllipseBtn').addEventListener('click', () => createShapeElement('ellipse'));
 document.getElementById('addTriangleBtn').addEventListener('click', () => createShapeElement('triangle'));
+document.getElementById('addLineBtn').addEventListener('click', createLineElement);
 
 undoBtn.addEventListener('click', () => loadHistory(historyIndex - 1));
 redoBtn.addEventListener('click', () => loadHistory(historyIndex + 1));

@@ -270,6 +270,28 @@ future work on this codebase, not just one-off fixes.
       details vs. the app's existing design language) — nothing specific
       flagged, just worth a look once shapes land.
 
+- [ ] **Duplicate element function** (any type: text, image, shape — not
+      shape-specific). Needs a design pass before implementation:
+      - **Trigger(s):** Ctrl/Cmd+D is the standard desktop convention; a
+        toolbar/sidebar "Duplicate" button is the touchscreen-accessible
+        equivalent (no keyboard shortcut reachable on iPad without an
+        external keyboard) — likely need both, not one or the other.
+        Right-click/long-press context menu is a third option worth
+        weighing against just a persistent button.
+      - **Placement of the copy:** reuse the existing `spawnOffset` cascade
+        pattern (elements.js) so duplicates don't land exactly on top of
+        the original and become unreachable/indistinguishable, consistent
+        with how new elements already spawn.
+      - **What gets copied:** straightforward for style/geometry/content;
+        needs a decision for `groupId` (duplicate joins the same group,
+        joins a new group with just the copy, or ungrouped?) and `zIndex`
+        (goes to front, or sits just above the original?).
+      - **Multi-select:** does duplicating a multi-selection duplicate all
+        of them as a batch (preserving relative offsets/grouping), or is it
+        single-element only initially?
+      - Needs a single `pushHistory()` call per duplicate action (or per
+        batch), not one per element, to keep undo/redo granularity sane.
+
 ---
 
 ## Key Learnings & Principles
