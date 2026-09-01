@@ -30,6 +30,31 @@
  * ---------------------------------------------------------------------------
  */
 
+// Margin-squeeze constants for imposed-A4 mode (single-sheet mode bypasses
+// this entirely — see below). MIN is a safe floor clear of typical printer
+// unprintable-edge limits (~4-5mm); PREFERRED matches the original fixed
+// 20mm/11mm layout, kept whenever squeezing wouldn't actually buy anything.
+const MIN_MARGIN_MM = 8;
+const PREFERRED_MARGIN_LEFT_MM = 20;
+const PREFERRED_MARGIN_TOP_MM = 11;
+const PAGE_WIDTH_MM = 210;
+const PAGE_HEIGHT_MM = 297;
+
+// Generic over width OR height — pass the matching page/card/preferred-
+// margin values. Only shrinks the margin as far as needed to fit one more
+// card than the preferred margin would allow; never shrinks it further
+// than that, and never below MIN_MARGIN_MM.
+function fitAxis(pageMm, cardMm, preferredMarginMm) {
+  const countAtPreferred = Math.max(1, Math.floor((pageMm - 2 * preferredMarginMm) / cardMm));
+  const countAtMin = Math.max(1, Math.floor((pageMm - 2 * MIN_MARGIN_MM) / cardMm));
+
+  if (countAtMin > countAtPreferred) {
+    const neededMargin = (pageMm - countAtMin * cardMm) / 2;
+    return { count: countAtMin, marginMm: Math.max(MIN_MARGIN_MM, neededMargin) };
+  }
+  return { count: countAtPreferred, marginMm: preferredMarginMm };
+}
+
 // Parses a CSS linear-gradient(...) string (as stored in state.background.value)
 // into its angle and an ordered list of {color, offset%} stops. Generic over
 // stop count so it works for both the 2-stop custom gradient builder and the
@@ -68,12 +93,23 @@ function compileToPrintSheet(jsonLayoutState) {
   const pxToMmFactor = getPxToMmFactor();
   const isSingleSheet = cardSize.printMode === 'single-sheet';
 
-  // Usable imposition area inside the A4 sheet's margins — irrelevant in
-  // single-sheet mode, where the "grid" is just the one card.
-  const GRID_WIDTH_MM = isSingleSheet ? cardSize.widthMm : 170;
-  const GRID_HEIGHT_MM = isSingleSheet ? cardSize.heightMm : 275;
-  const cols = isSingleSheet ? 1 : Math.max(1, Math.floor(GRID_WIDTH_MM / cardSize.widthMm));
-  const rows = isSingleSheet ? 1 : Math.max(1, Math.floor(GRID_HEIGHT_MM / cardSize.heightMm));
+  let cols, rows, marginLeftMm, marginTopMm, GRID_WIDTH_MM, GRID_HEIGHT_MM;
+
+  if (isSingleSheet) {
+    cols = 1; rows = 1;
+    marginLeftMm = 0; marginTopMm = 0;
+    GRID_WIDTH_MM = cardSize.widthMm;
+    GRID_HEIGHT_MM = cardSize.heightMm;
+  } else {
+    const fitW = fitAxis(PAGE_WIDTH_MM, cardSize.widthMm, PREFERRED_MARGIN_LEFT_MM);
+    const fitH = fitAxis(PAGE_HEIGHT_MM, cardSize.heightMm, PREFERRED_MARGIN_TOP_MM);
+    cols = fitW.count; marginLeftMm = fitW.marginMm;
+    rows = fitH.count; marginTopMm = fitH.marginMm;
+    // Grid box now tightly wraps the actual cards (cols x rows), rather
+    // than a fixed 170x275mm container with leftover unused space inside it.
+    GRID_WIDTH_MM = cols * cardSize.widthMm;
+    GRID_HEIGHT_MM = rows * cardSize.heightMm;
+  }
 
   let cardInnerHtml = '';
 
@@ -255,12 +291,12 @@ function compileToPrintSheet(jsonLayoutState) {
   }
 
   const pageSizeCss = isSingleSheet ? `${cardSize.widthMm}mm ${cardSize.heightMm}mm` : 'A4';
-  const sheetWidthMm = isSingleSheet ? cardSize.widthMm : 210;
-  const sheetHeightMm = isSingleSheet ? cardSize.heightMm : 297;
-  const sheetPadTop = isSingleSheet ? 0 : 11;
-  const sheetPadLeft = isSingleSheet ? 0 : 20;
+  const sheetWidthMm = isSingleSheet ? cardSize.widthMm : PAGE_WIDTH_MM;
+  const sheetHeightMm = isSingleSheet ? cardSize.heightMm : PAGE_HEIGHT_MM;
+  const sheetPadTop = isSingleSheet ? 0 : marginTopMm;
+  const sheetPadLeft = isSingleSheet ? 0 : marginLeftMm;
 
- return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
