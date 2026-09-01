@@ -9,6 +9,14 @@
  * ---------------------------------------------------------------------------
  */
 
+// Guards against overlapping interaction sessions — e.g. a pointercancel
+// event (fast/edge trackpad movement can trigger this instead of pointerup)
+// previously left the old pointermove/pointerup listeners attached to
+// window forever, so a NEW drag/resize would start on top of the still-live
+// old one, both writing to state simultaneously. Root cause of "jumpy" and
+// "ended up with a different object selected."
+let activeInteraction = null;
+
 const SNAP_THRESHOLD = 5;
 
 function clearSmartGuides() {
@@ -116,7 +124,7 @@ function snapDrag(proposedX, proposedY, w, h) {
   return { finalX, finalY };
 }
 
-function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isImage, ratio) {
+function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, ratioLocked, ratio, lockDominantAxis) {
   const { guidesX, guidesY, gridStep } = getSnapTargets();
   clearSmartGuides();
 
@@ -125,15 +133,55 @@ function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isIma
   let finalW = proposedW;
   let finalH = proposedH;
 
-  let snappedX = false;
-  let snappedY = false;
+  if (ratioLocked) {
+    // Single-axis snap: only the dominant axis (already decided in
+    // initResize, before this call) is tested against guides/grid — the
+    // other axis is always DERIVED from it via the ratio, never
+    // independently snap-evaluated. This is the fix for near-guide jitter:
+    // previously each axis could snap on its own, and a corner hovering
+    // right at the threshold flip-flopped between two differently-computed
+    // "corrected" sizes frame to frame. One decision, made once, removes
+    // the conflict entirely.
+    if (lockDominantAxis === 'w') {
+      const targetX = handlePos.includes('e') ? proposedX + proposedW : proposedX;
+      const res = evaluateSnap(targetX, guidesX, gridStep);
+      if (res.snapped !== targetX) {
+        if (handlePos.includes('e')) {
+          finalW = res.snapped - proposedX;
+        } else {
+          finalW = proposedW + (proposedX - res.snapped);
+          finalX = res.snapped;
+        }
+        if (res.isGuide) drawGuide('x', res.snapped);
+      }
+      finalH = finalW / ratio;
+      if (handlePos.includes('n')) finalY = proposedY + (proposedH - finalH);
+    } else {
+      const targetY = handlePos.includes('s') ? proposedY + proposedH : proposedY;
+      const res = evaluateSnap(targetY, guidesY, gridStep);
+      if (res.snapped !== targetY) {
+        if (handlePos.includes('s')) {
+          finalH = res.snapped - proposedY;
+        } else {
+          finalH = proposedH + (proposedY - res.snapped);
+          finalY = res.snapped;
+        }
+        if (res.isGuide) drawGuide('y', res.snapped);
+      }
+      finalW = finalH * ratio;
+      if (handlePos.includes('w')) finalX = proposedX + (proposedW - finalW);
+    }
+
+    return { finalX, finalY, finalW, finalH };
+  }
+
+  // --- Free (non-ratio-locked) resize: unchanged from before ---
 
   if (handlePos.includes('e')) {
     const res = evaluateSnap(proposedX + proposedW, guidesX, gridStep);
     if (res.snapped !== proposedX + proposedW) {
       finalW = res.snapped - proposedX;
       if (res.isGuide) drawGuide('x', res.snapped);
-      snappedX = true;
     }
   } else if (handlePos.includes('w')) {
     const res = evaluateSnap(proposedX, guidesX, gridStep);
@@ -141,7 +189,6 @@ function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isIma
       finalW = proposedW + (proposedX - res.snapped);
       finalX = res.snapped;
       if (res.isGuide) drawGuide('x', res.snapped);
-      snappedX = true;
     }
   }
 
@@ -150,7 +197,6 @@ function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isIma
     if (res.snapped !== proposedY + proposedH) {
       finalH = res.snapped - proposedY;
       if (res.isGuide) drawGuide('y', res.snapped);
-      snappedY = true;
     }
   } else if (handlePos.includes('n')) {
     const res = evaluateSnap(proposedY, guidesY, gridStep);
@@ -158,23 +204,6 @@ function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isIma
       finalH = proposedH + (proposedY - res.snapped);
       finalY = res.snapped;
       if (res.isGuide) drawGuide('y', res.snapped);
-      snappedY = true;
-    }
-  }
-
-  if (isImage) {
-    if (snappedX) {
-      finalH = finalW / ratio;
-      if (handlePos.includes('n')) finalY = proposedY + (proposedH - finalH);
-      document.querySelectorAll('.smart-guide.horizontal').forEach(g => g.remove());
-    } else if (snappedY) {
-      finalW = finalH * ratio;
-      if (handlePos.includes('w')) finalX = proposedX + (proposedW - finalW);
-      document.querySelectorAll('.smart-guide.vertical').forEach(g => g.remove());
-    } else {
-      finalH = finalW / ratio;
-      if (handlePos.includes('n')) finalY = proposedY + (proposedH - finalH);
-      if (handlePos.includes('w')) finalX = proposedX + (proposedW - finalW);
     }
   }
 
@@ -184,6 +213,7 @@ function snapResize(proposedX, proposedY, proposedW, proposedH, handlePos, isIma
 // --- Drag Engine (Multi-Select & Zoom Support) --------------------------
 
 function initDrag(e, id) {
+  if (activeInteraction) return; // a previous session is still (or stuck) active
   releaseFocusForCanvasInteraction();
   e.preventDefault();
   e.stopPropagation();
@@ -219,8 +249,17 @@ function initDrag(e, id) {
   const initialPrimaryPos = initialPositions.find(p => p.id === id);
 
   document.body.classList.add('is-dragging');
+  activeInteraction = 'drag';
+
+  // Capture the pointer on the element that started the drag — events for
+  // this pointerId now route here regardless of what's physically under
+  // the cursor (fast movement off the element, off-canvas, etc.), instead
+  // of relying on window-level listeners plus hoping pointerup always fires.
+  const captureTarget = e.currentTarget;
+  captureTarget.setPointerCapture(e.pointerId);
 
   function onPointerMove(ev) {
+    if (ev.pointerId !== e.pointerId) return;
     const currentZoomSlider = document.getElementById('canvasZoomSlider');
     const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
 
@@ -243,21 +282,27 @@ function initDrag(e, id) {
     });
   }
 
-  function onPointerUp() {
+  function endInteraction(ev) {
+    if (ev.pointerId !== e.pointerId) return;
     document.body.classList.remove('is-dragging');
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
+    captureTarget.removeEventListener('pointermove', onPointerMove);
+    captureTarget.removeEventListener('pointerup', endInteraction);
+    captureTarget.removeEventListener('pointercancel', endInteraction);
+    try { captureTarget.releasePointerCapture(e.pointerId); } catch (_) {}
     clearSmartGuides();
     pushHistory();
+    activeInteraction = null;
   }
 
-  window.addEventListener('pointermove', onPointerMove);
-  window.addEventListener('pointerup', onPointerUp);
+  captureTarget.addEventListener('pointermove', onPointerMove);
+  captureTarget.addEventListener('pointerup', endInteraction);
+  captureTarget.addEventListener('pointercancel', endInteraction);
 }
 
 // --- Resize Engine --------------------------------------------------------
 
 function initResize(e, id, handlePos) {
+  if (activeInteraction) return;
   releaseFocusForCanvasInteraction();
   e.preventDefault();
   e.stopPropagation();
@@ -278,13 +323,18 @@ function initResize(e, id, handlePos) {
   const minW = 20; const minH = 20;
   const cursorClass = (handlePos === 'nw' || handlePos === 'se') ? 'is-resizing-nwse' : 'is-resizing-nesw';
   document.body.classList.add(cursorClass);
+  activeInteraction = 'resize';
+
+  const captureTarget = e.currentTarget; // the resize handle itself
+  captureTarget.setPointerCapture(e.pointerId);
 
   function onPointerMove(ev) {
+    if (ev.pointerId !== e.pointerId) return;
     const currentZoomSlider = document.getElementById('canvasZoomSlider');
     const zoomScale = currentZoomSlider ? (parseInt(currentZoomSlider.value) / 100) : 1;
 
-    const dx = (ev.clientX - startX) / zoomScale;
-    const dy = (ev.clientY - startY) / zoomScale;
+    let dx = (ev.clientX - startX) / zoomScale;
+    let dy = (ev.clientY - startY) / zoomScale;
 
     let proposedW = initialW;
     let proposedH = initialH;
@@ -302,30 +352,18 @@ function initResize(e, id, handlePos) {
       proposedY = initialY + (initialH - proposedH);
     }
 
-    // Ratio-lock applies to images always; to any box-based shape
-    // (rectangle, ellipse, triangle — BOX_SHAPE_KINDS in elements.js) when
-    // either the persistent "Lock proportions" toggle is on, or Shift is
-    // held as a temporary override (desktop only — no physical Shift key
-    // on touch, hence the toggle).
     const isBoxShape = elData.type === 'shape' && BOX_SHAPE_KINDS.includes(elData.shapeKind);
     const shapeRatioLock = isBoxShape && (elData.style.lockAspect || ev.shiftKey);
     const ratioLocked = elData.type === 'image' || shapeRatioLock;
-    const lockRatio = elData.type === 'image' ? (initialW / initialH) : 1; // target W:H
+    const lockRatio = elData.type === 'image'
+      ? (initialW / initialH)
+      : (isBoxShape ? getShapeLockRatio(elData.shapeKind) : 1);   // was: always 1
+    let dominantAxis = null;
 
     if (ratioLocked) {
-      // Whichever axis has moved further (relative to its own starting
-      // size) drives the resize; the OTHER axis is derived from THAT
-      // axis's proposed SIZE via the ratio — not from its raw mouse delta.
-      // Deriving from size (always correctly signed, already computed
-      // above per-handle) instead of delta (which flips sign whenever dx
-      // and dy have opposite signs — e.g. dragging up-and-right on an
-      // 'se' handle) is what fixes the jitter: the old approach forced one
-      // axis's sign onto the other depending on which raw delta happened
-      // to be larger that frame, flip-flopping between growing/shrinking.
-      const wChange = Math.abs(proposedW - initialW) / initialW;
-      const hChange = Math.abs(proposedH - initialH) / initialH;
+      dominantAxis = Math.abs(dx) >= Math.abs(dy) ? 'w' : 'h';
 
-      if (wChange >= hChange) {
+      if (dominantAxis === 'w') {
         proposedH = proposedW / lockRatio;
       } else {
         proposedW = proposedH * lockRatio;
@@ -339,7 +377,7 @@ function initResize(e, id, handlePos) {
 
     const { finalX, finalY, finalW, finalH } = snapResize(
       proposedX, proposedY, proposedW, proposedH,
-      handlePos, ratioLocked, lockRatio
+      handlePos, ratioLocked, lockRatio, dominantAxis
     );
 
     elData.x = finalX;
@@ -350,14 +388,19 @@ function initResize(e, id, handlePos) {
     applyStylesToDOM(id);
   }
 
-  function onPointerUp() {
+  function endInteraction(ev) {
+    if (ev.pointerId !== e.pointerId) return;
     document.body.classList.remove(cursorClass);
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
+    captureTarget.removeEventListener('pointermove', onPointerMove);
+    captureTarget.removeEventListener('pointerup', endInteraction);
+    captureTarget.removeEventListener('pointercancel', endInteraction);
+    try { captureTarget.releasePointerCapture(e.pointerId); } catch (_) {}
     clearSmartGuides();
     pushHistory();
+    activeInteraction = null;
   }
 
-  window.addEventListener('pointermove', onPointerMove);
-  window.addEventListener('pointerup', onPointerUp);
+  captureTarget.addEventListener('pointermove', onPointerMove);
+  captureTarget.addEventListener('pointerup', endInteraction);
+  captureTarget.addEventListener('pointercancel', endInteraction);
 }

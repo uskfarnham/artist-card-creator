@@ -96,9 +96,27 @@ document.querySelectorAll('.tooltip-container').forEach(container => {
     e.stopPropagation();
   });
 });
+
 document.addEventListener('click', () => {
   document.querySelectorAll('.tooltip-container.tooltip-visible')
     .forEach(el => el.classList.remove('tooltip-visible'));
+});
+
+document.querySelectorAll('.tooltip-container').forEach(container => {
+  container.addEventListener('click', (e) => {
+    const wasOpen = container.classList.contains('tooltip-visible');
+    document.querySelectorAll('.tooltip-container.tooltip-visible')
+      .forEach(el => el.classList.remove('tooltip-visible'));
+    if (!wasOpen) container.classList.add('tooltip-visible');
+    e.stopPropagation();
+  });
+
+  // Mouse leaving should always close it on desktop, even if it was opened
+  // via click rather than hover — otherwise a clicked-open tooltip outlives
+  // the hover state that would normally hide it.
+  container.addEventListener('mouseleave', () => {
+    container.classList.remove('tooltip-visible');
+  });
 });
 
 // --- Element Creation / History / Save-Load Wiring -------------------------

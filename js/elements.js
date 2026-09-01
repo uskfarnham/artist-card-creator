@@ -124,6 +124,19 @@ const SHAPE_DEFAULT_STYLE = {
                      // option touch-only devices (no physical Shift key) have
 };
 
+// Equilateral triangle needs width:height ≈ 1.155:1, not 1:1 — derived from
+// buildShapeMarkup's vertex layout (apex at top-center, base across the
+// bottom): base length = width, and an equilateral triangle's height is
+// (√3/2) × its base, so height = (√3/2) × width, i.e. width/height = 2/√3.
+const TRIANGLE_EQUILATERAL_RATIO = 2 / Math.sqrt(3);
+
+// The box width:height ratio "locked" resize should target for a given
+// shape kind — 1:1 (square/circle) for rectangle/ellipse, the equilateral
+// ratio above for triangle. Centralized here so drag-resize.js doesn't need
+// its own shape-kind switch.
+function getShapeLockRatio(shapeKind) {
+  return shapeKind === 'triangle' ? TRIANGLE_EQUILATERAL_RATIO : 1;
+}
 
 function createShapeElement(shapeKind) {
   const id = 'el_' + Math.random().toString(36).substr(2, 9);
