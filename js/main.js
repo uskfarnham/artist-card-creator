@@ -206,10 +206,18 @@ window.addEventListener('keydown', (e) => {
     const adjustedStep = Math.round(baseStep / zoomScale);
 
     selected.forEach(el => {
-      if (e.key === 'ArrowUp') el.y -= adjustedStep;
-      if (e.key === 'ArrowDown') el.y += adjustedStep;
-      if (e.key === 'ArrowLeft') el.x -= adjustedStep;
-      if (e.key === 'ArrowRight') el.x += adjustedStep;
+      let dx = 0, dy = 0;
+      if (e.key === 'ArrowUp') dy = -adjustedStep;
+      if (e.key === 'ArrowDown') dy = adjustedStep;
+      if (e.key === 'ArrowLeft') dx = -adjustedStep;
+      if (e.key === 'ArrowRight') dx = adjustedStep;
+
+      if (el.type === 'shape' && el.shapeKind === 'line') {
+        el.x1 += dx; el.y1 += dy;
+        el.x2 += dx; el.y2 += dy;
+      } else {
+        el.x += dx; el.y += dy;
+      }
       applyStylesToDOM(el.id);
     });
     isNudging = true;
