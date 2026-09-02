@@ -454,7 +454,23 @@ function applyStylesToDOM(id) {
   elNode.style.zIndex = elData.zIndex;
 
   if (elData.type === 'text') {
-    // ...unchanged...
+    // Block-level default style was never actually applied to the preview
+    // DOM (this was a stub) — .element-content silently fell back to the
+    // browser's default font-size (~16px) instead of elData.style.fontSize
+    // (14px default), causing the on-screen preview to run measurably wider
+    // per character than the print output, which reads elData.style
+    // correctly. Any Quill inline per-run override already baked into
+    // elData.content's HTML (bold/italic/color/per-word size, etc.) still
+    // takes precedence over these via normal CSS cascade, same as print.js.
+    const contentNode = elNode.querySelector('.element-content');
+    const s = elData.style;
+    contentNode.style.fontFamily = s.fontFamily;
+    contentNode.style.fontSize = s.fontSize;
+    contentNode.style.fontWeight = s.fontWeight;
+    contentNode.style.fontStyle = s.fontStyle;
+    contentNode.style.color = s.color;
+    contentNode.style.textAlign = s.textAlign;
+    contentNode.style.lineHeight = s.lineHeight;
   }
 
   if (elData.type === 'shape') {
