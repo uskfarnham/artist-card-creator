@@ -117,6 +117,29 @@ for the original design rationale — summarized under Key Learnings below).
 
 ---
 
+## Resolved: Text preview missing block-level styling (2026-09-02)
+
+`applyStylesToDOM`'s text branch in `js/elements.js` had been left as a
+`// ...unchanged...` placeholder since the initial refactor — a pasting
+gap where a real diff summary was never filled back in with actual code.
+Practical effect: the on-screen canvas preview (`.element-content`) never
+had `fontFamily`/`fontSize`/`fontWeight`/`fontStyle`/`color`/`textAlign`/
+`lineHeight` applied to it at all, so it silently fell back to the
+browser's default font-size (~16px) instead of the intended 14px default.
+`print.js` was unaffected — it reads `elData.style` correctly — so the
+canvas preview ran measurably wider per character than print, enough to
+shift word-wrap points between the two. This is what surfaced as "line
+alignment doesn't match between canvas and print": the line's position
+was always correct (pure coordinate math, no font dependency); it was the
+text reflowing differently around it. Root-caused by comparing exact
+letter-by-letter horizontal alignment between an on-screen screenshot and
+the raw print SVG/HTML output for the same saved design — the line's
+mm-converted coordinates matched exactly, isolating the discrepancy to
+text rendering specifically. Fixed by actually applying `elData.style` to
+the preview's content node, matching what `print.js` already did.
+
+---
+
 ## Known Issues (Low Priority)
 
 - [ ] **Minor: faint gradient banding across tiled print cards.** Cards away
@@ -287,6 +310,17 @@ for the original design rationale — summarized under Key Learnings below).
   visible with dark colors. Rendering each instance as its own independently
   keyed resource (e.g. a uniquely-`id`'d SVG `<linearGradient>` per card,
   rather than a shared CSS string) is the general fix pattern.
+  - A `// ...unchanged...` placeholder left in committed code during a past
+  refactor is indistinguishable from a real no-op at a glance — it reads
+  as intentional shorthand, not a gap. Worth treating any such comment
+  encountered in the live codebase as a prompt to go verify what's
+  actually there, especially in a function whose *other* branches (line,
+  shape) are fully implemented right alongside it. When on-screen and
+  print output disagree, checking whether the *positioning* math
+  (coordinates, independent of font/content) matches exactly is a fast way
+  to isolate whether the discrepancy is geometric or content/rendering —
+  here, the line's coordinates matched perfectly, which pointed straight
+  at text rendering rather than any print-specific scaling bug.
 
 ## Tools & Resources
 - **Quill** (rich text editor, sidebar-only) — `js/text-formatting.js`
