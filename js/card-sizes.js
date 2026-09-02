@@ -54,19 +54,33 @@ function getPxToMmFactor() {
 function rescaleElementsToNewCanvas(oldDims, newDims) {
   const scaleX = newDims.widthPx / oldDims.widthPx;
   const scaleY = newDims.heightPx / oldDims.heightPx;
+  // Geometric mean gives shapes/lines a single proportional scale factor
+  // even when switching between differently-shaped cards (e.g. UK-EU 85x55
+  // to Mini 70x28, a much bigger height-squeeze than width-squeeze).
+  const uniformScale = Math.sqrt(scaleX * scaleY);
 
   state.elements.forEach(el => {
     if (el.type === 'shape' && el.shapeKind === 'line') {
       el.x1 *= scaleX; el.y1 *= scaleY;
       el.x2 *= scaleX; el.y2 *= scaleY;
+      el.style.strokeWidth = Math.max(1, Math.round(el.style.strokeWidth * uniformScale));
     } else {
       el.x *= scaleX; el.y *= scaleY;
       el.width *= scaleX; el.height *= scaleY;
+
+      if (el.type === 'shape') {
+        el.style.strokeWidth = Math.max(1, Math.round(el.style.strokeWidth * uniformScale));
+      }
+      // NOTE: text font-size is intentionally NOT auto-rescaled. A block's
+      // default size lives in el.style.fontSize, but any per-character
+      // size override (selecting a word and picking a different size) is
+      // baked directly into el.content as inline Quill HTML — rescaling
+      // only the block default would silently leave those overrides wrong,
+      // which is worse than not touching it at all. Needs a dedicated pass
+      // that parses/rescales el.content's inline runs before this is safe
+      // to automate. Until then: warn and let the user manually recheck.
     }
   });
-  // NOTE: font-size/stroke-width are intentionally left unscaled for now —
-  // rescaling those too is a reasonable follow-up but changes visual
-  // density in a way worth its own decision, not bundled in here.
 }
 
 // Applies currentCardSizeKey to the live canvas: pixel dimensions, the
@@ -97,7 +111,10 @@ function setCurrentCardSize(key) {
   const hasElements = state.elements.length > 0;
   if (hasElements) {
     const proceed = confirm(
-      'Switching card size will rescale all existing elements to fit the new canvas dimensions. Continue?'
+      'Switching card size will rescale all existing elements to fit the new canvas dimensions.\n\n' +
+      'Font sizes are NOT automatically rescaled — please check and re-adjust text size on each ' +
+      'text box afterward, especially if any text has mixed font sizes within it.\n\n' +
+      'Continue?'
     );
     if (!proceed) {
       cardSizeSelect.value = currentCardSizeKey; // revert the dropdown

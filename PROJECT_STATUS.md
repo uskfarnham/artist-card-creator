@@ -129,6 +129,14 @@ for the original design rationale — summarized under Key Learnings below).
       eliminated. Suspected residual cause: Chromium's print/PDF
       color-economy handling, outside app code. Not investigated further;
       revisit only if it becomes more noticeable in practice.
+- [ ] **Font-size can drift out of sync with its text box after a card-size
+      switch.** Root cause: `rescaleElementsToNewCanvas` scales box
+      geometry but not font-size (see Backlog — "Per-run font-size rescale
+      on card size switch"). Symptom: text overflows/looks oversized
+      relative to its box, most visible in print output where the
+      overflow gets clipped at the card edge rather than the text box
+      edge. Mitigated (not fixed) by a warning in the card-size confirm
+      dialog telling the user to recheck manually.
 
 ---
 
@@ -182,6 +190,21 @@ for the original design rationale — summarized under Key Learnings below).
       `.canvas-container` and trigger a re-layout.
 - [ ] General styling/UX polish pass (Quill's snow-theme visual details vs.
       the app's existing design language).
+- [ ] **Per-run font-size rescale on card size switch.** `rescaleElementsToNewCanvas`
+      (`card-sizes.js`) currently rescales element geometry and shape
+      `strokeWidth` automatically, but deliberately leaves text font-size
+      untouched — a text element's block-level default
+      (`el.style.fontSize`) could be scaled trivially, but any
+      per-character size override (selecting a word/phrase and picking a
+      different size than the rest) is baked directly into `el.content` as
+      inline Quill HTML, not exposed as a discrete field. Auto-scaling only
+      the block default would silently leave those overrides wrong — worse
+      than not touching it, since the mismatch wouldn't surface until
+      print. Needs a dedicated pass: parse `el.content`'s Quill-generated
+      HTML (or better, get the underlying Delta from Quill if kept
+      accessible), rescale every inline `font-size` run proportionally,
+      re-serialize. Until this exists, `setCurrentCardSize`'s confirm
+      dialog warns the user to manually recheck font sizes after switching.
 
 ---
 
