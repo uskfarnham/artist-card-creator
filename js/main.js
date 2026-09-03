@@ -145,14 +145,66 @@ loadJsonInput.addEventListener('change', loadStateFromDisk);
 const canvasZoomSlider = document.getElementById('canvasZoomSlider');
 const zoomDisplay = document.getElementById('zoomDisplay');
 
-canvasZoomSlider.addEventListener('input', (e) => {
-  const zoomValue = parseInt(e.target.value);
-  zoomDisplay.textContent = `${zoomValue}%`;
+// Cached once, not re-measured on every zoom step — see
+// applyZoomToBothSides below for why. Label height and the slot's flex
+// gap are fixed by CSS (padding/line-height/gap), so they never actually
+// change; re-reading them via getComputedStyle/offsetHeight on every
+// slider 'input' event forces a synchronous layout recalculation each
+// time, which is what was causing the sticky/lumpy feel while dragging.
+let slotZoomMetrics = {};
 
+function cacheSlotZoomMetrics() {
+  CARD_SIDE_KEYS.forEach(side => {
+    const canvasNode = cardSides[side].canvasNode;
+    const slot = canvasNode.closest('.card-side-slot');
+    const label = slot.querySelector('.card-side-label');
+    slotZoomMetrics[side] = {
+      slot,
+      labelHeightPx: label.offsetHeight,
+      slotGapPx: parseFloat(getComputedStyle(slot).gap) || 0
+    };
+  });
+}
+
+// Applies zoom to BOTH canvases at once (previously only ever touched the
+// active side's `canvas`, which is why front/back visibly mismatched in
+// size). Also reserves the scaled footprint on each canvas's wrapping
+// slot — transform: scale() doesn't affect the element's own layout box,
+// so without this the two canvases' visual overflow eventually overlaps
+// each other (and their own labels above them) as zoom increases, since
+// the flex gap between slots stays fixed regardless of how large the
+// canvases visually render.
+//
+// transform-origin is 'top center', not 'center center' — scaling from
+// the vertical center meant HALF the extra visual size grew upward past
+// the slot's own top edge (past the label, into the workspace padding,
+// and beyond), since the reserved extra height is entirely added BELOW
+// the canvas in the slot's normal flex flow. That upward overflow was
+// rendering hidden behind the topbar (z-index: 20, above the canvas
+// layer) rather than being off-screen — nothing to scroll to. Anchoring
+// the scale to the top means ALL the extra visual size grows downward,
+// matching the direction the reserved slot space was already added in,
+// so nothing overflows upward at any zoom level.
+function applyZoomToBothSides(zoomValue) {
   const scaleMultiplier = zoomValue / 100;
-  canvas.style.setProperty('transform', `scale(${scaleMultiplier})`, 'important');
-  canvas.style.transformOrigin = 'center center';
-});
+  const baseDims = getCanvasPixelDims(); // card-sizes.js — current card size's unscaled dims, shared by both sides
+
+  CARD_SIDE_KEYS.forEach(side => {
+    const canvasNode = cardSides[side].canvasNode;
+    canvasNode.style.setProperty('transform', `scale(${scaleMultiplier})`, 'important');
+    canvasNode.style.transformOrigin = 'top center';
+
+    const { slot, labelHeightPx, slotGapPx } = slotZoomMetrics[side];
+    slot.style.width = `${baseDims.widthPx * scaleMultiplier}px`;
+    slot.style.height = `${labelHeightPx + slotGapPx + baseDims.heightPx * scaleMultiplier}px`;
+  });
+}
+
+ canvasZoomSlider.addEventListener('input', (e) => {
+   const zoomValue = parseInt(e.target.value);
+   zoomDisplay.textContent = `${zoomValue}%`;
+   applyZoomToBothSides(zoomValue);
+ });
 
 // --- Layering -----------------------------------------------------------
 
@@ -363,6 +415,8 @@ function syncPropertiesPanel() {
 
 // --- Init ---------------------------------------------------------------
 
+cacheSlotZoomMetrics(); // measure once, before any zoom/card-size sizing runs
 applyCardSizeToCanvas(); // sets initial pixel size/subtitle from card-sizes.js
+applyZoomToBothSides(parseInt(canvasZoomSlider.value)); // establishes initial slot sizing at 100%
 renderAllPalettes();
 pushHistory();

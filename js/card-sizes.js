@@ -97,7 +97,13 @@ function applyCardSizeToCanvas() {
   const subtitle = document.getElementById('cardSizeSubtitle');
   if (subtitle) subtitle.textContent = size.label;
 
+  state.elements.forEach(el => applyStylesToDOM(el.id));
   syncSelectionToDOM();
+
+  // Slot sizing reserved for zoom (main.js) depends on both card size and
+  // zoom level — re-apply now so it reflects the just-changed size
+  // immediately, at whatever zoom level is currently set.
+  applyZoomToBothSides(parseInt(canvasZoomSlider.value));
 }
 
 // Records the card-size-change rescale in the INACTIVE side's own history,
