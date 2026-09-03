@@ -346,6 +346,17 @@ function renderElementToDOM(elData) {
   elNode.className = 'design-element';
   elNode.id = elData.id;
 
+  // Per-element double-click/double-tap tracking, closure-scoped to this
+  // element. Replaces the old native `dblclick` listener on contentNode —
+  // initDrag() below calls preventDefault() on pointerdown, which per the
+  // Pointer Events spec suppresses the browser's compatibility mouse events
+  // (click/dblclick) that would normally follow. So dblclick never fires
+  // once a drag-capable pointerdown handler is in the chain. Detecting the
+  // double-click manually here, before that suppression happens, sidesteps
+  // the issue entirely and also covers touch double-tap (whose dblclick
+  // synthesis is unreliable anyway) with the same code path.
+  let lastPointerDown = { time: 0, x: 0, y: 0 };
+
   let contentNode;
 
   if (elData.type === 'text') {
@@ -354,12 +365,8 @@ function renderElementToDOM(elData) {
     contentNode.innerHTML = elData.content;
 
     // Read-only preview — actual editing happens in the sidebar Quill
-    // instance. Double-click selects + hands off to it.
-    contentNode.addEventListener('dblclick', () => {
-      const selected = state.elements.filter(e => e.selected);
-      if (selected.length > 1) return;
-      activateTextEditor(elData);
-    });
+    // instance, activated via the manual double-click detection in the
+    // elNode pointerdown handler below.
 
   } else if (elData.type === 'image') {
     contentNode = document.createElement('img');
@@ -407,6 +414,28 @@ function renderElementToDOM(elData) {
 
   elNode.addEventListener('pointerdown', (e) => {
     if (e.target.classList.contains('resize-handle')) return;
+
+    // Manual double-click/double-tap detection — see comment on
+    // lastPointerDown declaration above for why this replaced the native
+    // dblclick listener.
+    if (elData.type === 'text') {
+      const now = Date.now();
+      const dx = e.clientX - lastPointerDown.x;
+      const dy = e.clientY - lastPointerDown.y;
+      const isDoubleClick =
+        (now - lastPointerDown.time) < 350 && (dx * dx + dy * dy) < 100;
+      lastPointerDown = { time: now, x: e.clientX, y: e.clientY };
+
+      if (isDoubleClick) {
+        const selected = state.elements.filter(el => el.selected);
+        if (selected.length > 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        activateTextEditor(elData);
+        return; // don't also start a drag on the activating click
+      }
+    }
+
     initDrag(e, elData.id);
   });
 
