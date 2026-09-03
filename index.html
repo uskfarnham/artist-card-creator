@@ -153,9 +153,19 @@
 
       <!-- WORKSPACE -->
       <main class="workspace" id="workspace">
-        <div class="canvas-container" id="canvas">
-          <div class="safe-zone"></div>
-          <div id="smart-guides-container"></div>
+        <div class="card-side-slot" id="cardSideSlot-front">
+          <div class="card-side-label">Front</div>
+          <div class="canvas-container" id="canvas-front">
+            <div class="safe-zone"></div>
+            <div class="smart-guides-container" id="smart-guides-container-front"></div>
+          </div>
+        </div>
+        <div class="card-side-slot" id="cardSideSlot-back">
+          <div class="card-side-label">Back</div>
+          <div class="canvas-container" id="canvas-back">
+            <div class="safe-zone"></div>
+            <div class="smart-guides-container" id="smart-guides-container-back"></div>
+          </div>
         </div>
       </main>
 
@@ -352,6 +362,7 @@
   <!-- App modules — order matters: state/card-sizes before anything that reads
        them, text-formatting before main (which wires up event listeners) -->
   <script src="js/state.js"></script>
+  <script src="js/card-sides.js"></script>
   <script src="js/card-sizes.js"></script>
   <script src="js/elements.js"></script>
   <script src="js/drag-resize.js"></script>

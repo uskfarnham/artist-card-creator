@@ -24,8 +24,11 @@
 
 // --- DOM References -------------------------------------------------------
 
-const canvas = document.getElementById('canvas');
-const smartGuidesContainer = document.getElementById('smart-guides-container');
+// canvas/smartGuidesContainer start pointing at the Front side — card-sides.js
+// (loaded just before this file) has already populated cardSides.front by
+// this point, and reassigns both on every side switch thereafter.
+let canvas = cardSides.front.canvasNode;
+let smartGuidesContainer = cardSides.front.smartGuidesNode;
 const gridSnapToggle = document.getElementById('gridSnapToggle');
 
 const addTextBtn = document.getElementById('addTextBtn');
@@ -167,15 +170,6 @@ document.getElementById('btnAlignTop').addEventListener('click', () => alignElem
 document.getElementById('btnAlignMiddle').addEventListener('click', () => alignElements('middle'));
 document.getElementById('btnAlignBottom').addEventListener('click', () => alignElements('bottom'));
 
-// --- Canvas Deselection -------------------------------------------------
-
-canvas.addEventListener('pointerdown', (e) => {
-  if (e.target === canvas || e.target.classList.contains('safe-zone')) {
-    releaseFocusForCanvasInteraction();
-    state.elements.forEach(el => el.selected = false);
-    syncSelectionToDOM();
-  }
-});
 
 // --- Keyboard Shortcuts -------------------------------------------------
 

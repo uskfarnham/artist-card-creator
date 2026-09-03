@@ -140,6 +140,31 @@ the preview's content node, matching what `print.js` already did.
 
 ---
 
+## Resolved: Double-click-to-edit broken by pointer-capture drag rewrite (2026-09-03)
+
+Double-clicking a canvas text element to hand off to the sidebar Quill
+editor (`activateTextEditor`) stopped working — a regression from the
+drag/resize stability rewrite (`initDrag`/`initResize`, see Key Learnings),
+not from the double-click code itself. `initDrag` calls `preventDefault()`
+on `pointerdown`, which per the Pointer Events spec suppresses the
+browser's synthetic compatibility mouse events — `click` and `dblclick` —
+that would otherwise fire afterward. Since `contentNode`'s native
+`dblclick` listener depended on that synthetic event, and `elNode`'s
+`pointerdown` handler (which calls `initDrag`) sits in the same bubble
+path and fires first, every double-click's first click got intercepted
+and `preventDefault()`'d before a `dblclick` could ever be dispatched.
+
+Fixed in `elements.js`'s `renderElementToDOM` by removing the native
+`dblclick` listener entirely and detecting double-click/double-tap
+manually inside the existing `pointerdown` handler, using a per-element
+timestamp + position check (closure-scoped `lastPointerDown`), before
+`initDrag` runs. This also incidentally makes double-*tap* on iPad more
+reliable, since touch `dblclick` synthesis was already flaky — one code
+path now covers both input types instead of relying on the browser to
+synthesize an event that pointer-capture drag logic was silently eating.
+
+---
+
 ## Known Issues (Low Priority)
 
 - [ ] **Minor: faint gradient banding across tiled print cards.** Cards away
@@ -270,6 +295,20 @@ the preview's content node, matching what `print.js` already did.
   interaction regardless of what's under the cursor) plus explicit
   `pointercancel` handling identical to `pointerup`, plus a module-level
   `activeInteraction` guard as a backstop against overlapping sessions.
+- **`preventDefault()` on `pointerdown` silently suppresses downstream
+  `click`/`dblclick` on the same element** — the Pointer Events spec has
+  browsers synthesize compatibility mouse events (`click`, `dblclick`)
+  after pointer events, but calling `preventDefault()` on the pointer
+  event cancels that synthesis. The drag-rewrite's `initDrag` does this on
+  every `pointerdown`, which broke double-click-to-edit on text elements
+  with no visible error — the `dblclick` listener was still attached and
+  correct, it just never fired. General rule going forward: any feature
+  that wants a native `click`/`dblclick` on an element that *also* has a
+  `pointerdown`-driven drag/resize handler needs to detect it manually
+  (timestamp + position check inside the `pointerdown` handler itself)
+  rather than relying on the browser's synthetic event — relevant for any
+  future double-click or click-count-based feature (e.g. duplicate
+  element, per PROJECT_STATUS.md backlog).
 - **Aspect-ratio-locked resize must derive the "other" axis from the
   dominant axis's proposed SIZE, not its raw mouse delta** — deriving from
   delta flips sign whenever dx/dy have opposite signs (e.g. dragging

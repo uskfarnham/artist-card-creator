@@ -3,13 +3,14 @@
  * ---------------------------------------------------------------------------
  * Single source of truth for card dimensions.
  *
- * TODO (see PROJECT_STATUS.md — "Card size configuration"):
- *  - Add a size-selector control to the "Canvas Settings" accordion
- *  - On change, recalculate:
- *      - .canvas-container width/height (css/styles.css or inline style)
- *      - BASE_CANVAS_WIDTH_PX / getPxToMmFactor() below
- *      - the imposition grid (rows/cols per A4 sheet) in print.js, which
- *        currently assumes a fixed 2 cols x 5 rows for 85x55mm cards
+ * STEP 3 of the front/back feature: card size is shared by both sides (it's
+ * one physical card), so every function here that touches canvas dims or
+ * element geometry now loops CARD_SIDE_KEYS instead of only ever acting on
+ * the active side. getSideElements() is the key helper this all leans on —
+ * it returns the LIVE elements array for whichever side is asked about,
+ * whether that's the active side (state.elements) or the parked one
+ * (cardSides[side].elements) — see card-sides.js for why those are two
+ * different sources depending on which side is currently active.
  * ---------------------------------------------------------------------------
  */
 
@@ -23,12 +24,6 @@ const CARD_SIZES = {
 
 let currentCardSizeKey = 'uk-eu';
 
-// Fixed on-screen scale shared by EVERY card size, derived from the
-// original 85mm-wide card rendering at 321px. One constant scale — used
-// on both axes, for every size — is what keeps getPxToMmFactor() correct;
-// letting each size fit its own arbitrary target width would reintroduce
-// a non-uniform x/y scale and silently break print.js's mm math for any
-// non-square card.
 const PX_PER_MM = 321 / CARD_SIZES['uk-eu'].widthMm;
 
 function getCurrentCardSize() {
@@ -40,26 +35,29 @@ function getCanvasPixelDims(key = currentCardSizeKey) {
   return { widthPx: size.widthMm * PX_PER_MM, heightPx: size.heightMm * PX_PER_MM };
 }
 
-// Now constant — same px:mm ratio on both axes, for every size, since the
-// canvas element itself is resized to each size's real mm aspect ratio
-// (see applyCardSizeToCanvas below) rather than staying a fixed pixel box.
 function getPxToMmFactor() {
   return 1 / PX_PER_MM;
 }
 
-// Scales every element's geometry to fit the new canvas box. Independent
-// x/y scale factors (not a single uniform one) — this stretches designs
-// to fill the new card's proportions rather than preserving the old
-// aspect ratio and leaving empty margins, matching "fit new dimensions".
-function rescaleElementsToNewCanvas(oldDims, newDims) {
+// Returns the LIVE elements array for the given side — state.elements if
+// it's the currently active side, or cardSides[side].elements otherwise.
+// Needed because the active side's real data lives in the `state` global,
+// not in cardSides[currentSide] (that only gets refreshed on switch-out —
+// see switchToSide in card-sides.js).
+function getSideElements(side) {
+  return (side === currentSide) ? state.elements : cardSides[side].elements;
+}
+
+// Scales one side's element geometry to fit the new canvas box. Unchanged
+// logic from before Step 3 — just takes the elements array as a parameter
+// now instead of always reaching for state.elements directly, so it can be
+// called once per side.
+function rescaleElementsToNewCanvas(elementsArray, oldDims, newDims) {
   const scaleX = newDims.widthPx / oldDims.widthPx;
   const scaleY = newDims.heightPx / oldDims.heightPx;
-  // Geometric mean gives shapes/lines a single proportional scale factor
-  // even when switching between differently-shaped cards (e.g. UK-EU 85x55
-  // to Mini 70x28, a much bigger height-squeeze than width-squeeze).
   const uniformScale = Math.sqrt(scaleX * scaleY);
 
-  state.elements.forEach(el => {
+  elementsArray.forEach(el => {
     if (el.type === 'shape' && el.shapeKind === 'line') {
       el.x1 *= scaleX; el.y1 *= scaleY;
       el.x2 *= scaleX; el.y2 *= scaleY;
@@ -71,28 +69,27 @@ function rescaleElementsToNewCanvas(oldDims, newDims) {
       if (el.type === 'shape') {
         el.style.strokeWidth = Math.max(1, Math.round(el.style.strokeWidth * uniformScale));
       }
-      // NOTE: text font-size is intentionally NOT auto-rescaled. A block's
-      // default size lives in el.style.fontSize, but any per-character
-      // size override (selecting a word and picking a different size) is
-      // baked directly into el.content as inline Quill HTML — rescaling
-      // only the block default would silently leave those overrides wrong,
-      // which is worse than not touching it at all. Needs a dedicated pass
-      // that parses/rescales el.content's inline runs before this is safe
-      // to automate. Until then: warn and let the user manually recheck.
+      // Font-size rescale still deliberately unimplemented — see
+      // PROJECT_STATUS.md backlog.
     }
   });
 }
 
-// Applies currentCardSizeKey to the live canvas: pixel dimensions, the
-// (currently CSS-only, not yet consumed) --card-width/--card-height vars,
-// and the topbar subtitle label. Re-renders every element afterward since
-// their underlying x/y/width/height just changed.
+// Applies currentCardSizeKey to BOTH sides' canvases and re-renders every
+// element on both — previously only ever touched the single shared canvas.
 function applyCardSizeToCanvas() {
   const size = getCurrentCardSize();
   const dims = getCanvasPixelDims();
 
-  canvas.style.width = `${dims.widthPx}px`;
-  canvas.style.height = `${dims.heightPx}px`;
+  CARD_SIDE_KEYS.forEach(side => {
+    const canvasNode = cardSides[side].canvasNode;
+    canvasNode.style.width = `${dims.widthPx}px`;
+    canvasNode.style.height = `${dims.heightPx}px`;
+
+    // Pass elData directly (elements.js's applyStylesToDOM override) since
+    // for the inactive side, state.elements.find() would find nothing.
+    getSideElements(side).forEach(el => applyStylesToDOM(el.id, el));
+  });
 
   document.documentElement.style.setProperty('--card-width', `${size.widthMm}mm`);
   document.documentElement.style.setProperty('--card-height', `${size.heightMm}mm`);
@@ -100,40 +97,62 @@ function applyCardSizeToCanvas() {
   const subtitle = document.getElementById('cardSizeSubtitle');
   if (subtitle) subtitle.textContent = size.label;
 
-  state.elements.forEach(el => applyStylesToDOM(el.id));
   syncSelectionToDOM();
+}
+
+// Records the card-size-change rescale in the INACTIVE side's own history,
+// mirroring what pushHistory() (state.js) does for the active side's live
+// historyStack/historyIndex globals. Without this, the inactive side's
+// elements would be rescaled with no corresponding history entry — a later
+// undo after switching to that side would have no record the resize ever
+// happened.
+function pushHistorySnapshotForInactiveSide() {
+  const inactiveSide = CARD_SIDE_KEYS.find(s => s !== currentSide);
+  const sideData = cardSides[inactiveSide];
+  const clonedElements = JSON.parse(JSON.stringify(sideData.elements));
+  const clonedBackground = JSON.parse(JSON.stringify(sideData.background));
+  sideData.historyStack = sideData.historyStack.slice(0, sideData.historyIndex + 1);
+  sideData.historyStack.push({ elements: clonedElements, background: clonedBackground, cardSizeKey: currentCardSizeKey });
+  sideData.historyIndex++;
 }
 
 function setCurrentCardSize(key) {
   if (!CARD_SIZES[key]) { console.warn(`Unknown card size key: ${key}`); return; }
   if (key === currentCardSizeKey) return;
 
-  const hasElements = state.elements.length > 0;
+  const hasElements = CARD_SIDE_KEYS.some(side => getSideElements(side).length > 0);
   if (hasElements) {
     const proceed = confirm(
-      'Switching card size will rescale all existing elements to fit the new canvas dimensions.\n\n' +
+      'Switching card size will rescale all existing elements on BOTH the front and back to fit the new canvas dimensions.\n\n' +
       'Font sizes are NOT automatically rescaled — please check and re-adjust text size on each ' +
       'text box afterward, especially if any text has mixed font sizes within it.\n\n' +
       'Continue?'
     );
     if (!proceed) {
-      cardSizeSelect.value = currentCardSizeKey; // revert the dropdown
+      cardSizeSelect.value = currentCardSizeKey;
       return;
     }
   }
 
   const oldDims = getCanvasPixelDims();
   currentCardSizeKey = key;
+  const newDims = getCanvasPixelDims();
 
-  if (hasElements) rescaleElementsToNewCanvas(oldDims, getCanvasPixelDims());
+  CARD_SIDE_KEYS.forEach(side => {
+    const elementsForSide = getSideElements(side);
+    if (elementsForSide.length > 0) {
+      rescaleElementsToNewCanvas(elementsForSide, oldDims, newDims);
+    }
+  });
 
   applyCardSizeToCanvas();
-  pushHistory();
+
+  pushHistory();                          // active side
+  pushHistorySnapshotForInactiveSide();   // inactive side
+
+  cardSizeSelect.value = currentCardSizeKey;
 }
 
-// Declared here (not main.js) — same forward-reference rule as propInputs
-// in text-formatting.js. Populated from CARD_SIZES so new sizes only ever
-// need adding in one place.
 const cardSizeSelect = document.getElementById('cardSizeSelect');
 Object.keys(CARD_SIZES).forEach(key => {
   const opt = document.createElement('option');

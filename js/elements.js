@@ -443,8 +443,12 @@ function renderElementToDOM(elData) {
   applyStylesToDOM(elData.id);
 }
 
-function applyStylesToDOM(id) {
-  const elData = state.elements.find(e => e.id === id);
+function applyStylesToDOM(id, elDataOverride) {
+  // elDataOverride lets a caller supply the element data directly, for
+  // cases operating on the INACTIVE side (e.g. card-sizes.js resizing
+  // both sides at once) — state.elements only ever holds the active
+  // side's elements, so a plain id lookup can't find the other side's.
+  const elData = elDataOverride || state.elements.find(e => e.id === id);
   const elNode = document.getElementById(id);
   if (!elData || !elNode) return;
 

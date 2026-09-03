@@ -123,6 +123,8 @@ html, body {
   justify-content: center;
   position: relative;
   padding: 40px;
+  gap: 48px;
+  flex-wrap: wrap; /* stacks the two cards on narrow/iPad-portrait widths */
   background-color: #e5e5f7;
   background-image: radial-gradient(#c7c7d4 1px, transparent 1px);
   background-size: 20px 20px;
@@ -152,6 +154,46 @@ body.is-resizing-nesw * { cursor: nesw-resize !important; }
   flex-shrink: 0;
   will-change: transform;
   transition: transform 0.05s linear;
+}
+
+/* --- Front/Back Card Side Slots --- */
+.card-side-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-side-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--label-color);
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #e5e7eb;
+  transition: background 0.15s, color 0.15s;
+}
+
+.card-side-slot.active-side .card-side-label {
+  background: var(--accent-color);
+  color: #ffffff;
+}
+
+/* Inactive canvas is still fully visible (that's the point — designing
+   alongside each other) but visually receded and clickable to activate. */
+.card-side-slot:not(.active-side) .canvas-container {
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.card-side-slot:not(.active-side) .canvas-container:hover {
+  opacity: 0.8;
+}
+
+.card-side-slot.active-side .canvas-container {
+  box-shadow: 0 0 0 3px var(--accent-color), 0 20px 40px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .safe-zone {

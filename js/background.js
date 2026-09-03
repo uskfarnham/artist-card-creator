@@ -85,25 +85,25 @@ canvasBgFadeSlider.addEventListener('input', (e) => {
 // be reused by loadHistory (state.js) when restoring a snapshot — calling
 // the full updateCanvasBackground there would incorrectly push a NEW history
 // entry every time the user hits undo/redo.
-function applyBackgroundToDOM() {
-  let overlayNode = canvas.querySelector('.canvas-bg-overlay');
+function applyBackgroundToDOM(targetCanvas = canvas, backgroundData = state.background) {
+  let overlayNode = targetCanvas.querySelector('.canvas-bg-overlay');
   if (!overlayNode) {
     overlayNode = document.createElement('div');
     overlayNode.className = 'canvas-bg-overlay';
-    canvas.insertBefore(overlayNode, canvas.firstChild);
+    targetCanvas.insertBefore(overlayNode, targetCanvas.firstChild);
   }
 
-  const opacityMultiplier = (state.background.fade || 0) / 100;
+  const opacityMultiplier = (backgroundData.fade || 0) / 100;
   overlayNode.style.opacity = opacityMultiplier;
 
-  if (state.background.type === 'image') {
-    canvas.style.background = state.background.value;
-    canvas.style.backgroundSize = 'cover';
-    canvas.style.backgroundPosition = 'center';
+  if (backgroundData.type === 'image') {
+    targetCanvas.style.background = backgroundData.value;
+    targetCanvas.style.backgroundSize = 'cover';
+    targetCanvas.style.backgroundPosition = 'center';
   } else {
-    canvas.style.background = state.background.value;
-    canvas.style.backgroundSize = 'initial';
-    canvas.style.backgroundPosition = 'initial';
+    targetCanvas.style.background = backgroundData.value;
+    targetCanvas.style.backgroundSize = 'initial';
+    targetCanvas.style.backgroundPosition = 'initial';
   }
 }
 
