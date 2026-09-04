@@ -29,7 +29,7 @@ function createTextElement() {
     id: id, type: 'text',
     x: 20 + spawnOffset, y: 20 + spawnOffset,
     width: 220, height: 50,
-    content: 'Double-click to edit text',
+    content: 'Double-click to edit text in sidebar',
     selected: true,
     zIndex: state.elements.length + 1,
     style: {
