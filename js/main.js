@@ -30,6 +30,11 @@
 let canvas = cardSides.front.canvasNode;
 let smartGuidesContainer = cardSides.front.smartGuidesNode;
 const gridSnapToggle = document.getElementById('gridSnapToggle');
+const multiSelectToggle = document.getElementById('multiSelectToggle');
+let multiSelectModeActive = false;
+multiSelectToggle.addEventListener('change', (e) => {
+  multiSelectModeActive = e.target.checked;
+});
 
 const addTextBtn = document.getElementById('addTextBtn');
 const addImageBtn = document.getElementById('addImageBtn');
@@ -37,12 +42,15 @@ const imageUploadInput = document.getElementById('imageUploadInput');
 
 const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
+const cutBtn = document.getElementById('cutBtn');
+const copyBtn = document.getElementById('copyBtn');
+const pasteBtn = document.getElementById('pasteBtn');
 const saveBtn = document.getElementById('saveBtn');
 const loadBtn = document.getElementById('loadBtn');
 // Note: printBtn is declared in print.js, not here — its click handler
 // (print.js) runs as a top-level statement before main.js loads, so the
 // declaration has to live there. See print.js header comment.
-const loadJsonInput = document.getElementById('loadJsonInput');
+const loadJsonInput = document.getElementById('loadJsonInput'); 
 const deleteElementBtn = document.getElementById('deleteElementBtn');
 
 const propertiesPanel = document.getElementById('propertiesPanel');
@@ -134,6 +142,9 @@ document.getElementById('addLineBtn').addEventListener('click', createLineElemen
 
 undoBtn.addEventListener('click', () => loadHistory(historyIndex - 1));
 redoBtn.addEventListener('click', () => loadHistory(historyIndex + 1));
+cutBtn.addEventListener('click', cutSelectedElements);
+copyBtn.addEventListener('click', copySelectedElements);
+pasteBtn.addEventListener('click', pasteClipboard);
 deleteElementBtn.addEventListener('click', deleteSelectedElements);
 
 saveBtn.addEventListener('click', saveStateToDisk);
@@ -233,6 +244,18 @@ window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey) {
     if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); loadHistory(historyIndex - 1); }
     else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); loadHistory(historyIndex + 1); }
+    else if (e.key === 'x' && !isInput && state.elements.some(el => el.selected)) {
+      e.preventDefault();
+      cutSelectedElements();
+    }
+    else if (e.key === 'c' && !isInput && state.elements.some(el => el.selected)) {
+      e.preventDefault();
+      copySelectedElements();
+    }
+    else if (e.key === 'v' && !isInput && clipboard.length > 0) {
+      e.preventDefault();
+      pasteClipboard();
+    }
   }
 
   if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
@@ -339,6 +362,7 @@ function syncSelectionToDOM() {
   });
 
   syncPropertiesPanel();
+  updateClipboardButtonStates(); // clipboard.js — keeps Copy/Paste enabled state current
 }
 
 function syncPropertiesPanel() {
@@ -348,11 +372,10 @@ function syncPropertiesPanel() {
 
   textPropertiesGroup.style.display = 'none';
   imagePropertiesGroup.style.display = 'none';
-  shapePropertiesGroup.style.display = 'none';   // NEW
+  shapePropertiesGroup.style.display = 'none';
   layerPropertiesGroup.style.display = 'none';
   alignmentPropertiesGroup.style.display = 'none';
   deleteElementBtn.style.display = 'none';
-  
 
   const targetScrollBox = propertiesPanel.querySelector('.sidebar-scroll-box') || propertiesPanel;
 
@@ -373,16 +396,17 @@ function syncPropertiesPanel() {
   placeholderNode.style.display = 'none';
   deleteElementBtn.style.display = 'block';
 
+  // Layer Depth now applies to ANY non-empty selection — single element,
+  // free multi-select, or a tapped group (which auto-selects as a whole
+  // via initDrag) — moveLayer (elements.js) handles all three identically.
+  layerPropertiesGroup.style.display = 'block';
+
   if (selected.length === 1) {
-    layerPropertiesGroup.style.display = 'block';
     const elData = selected[0];
 
     if (elData.type === 'text') {
       textPropertiesGroup.style.display = 'block';
 
-      // Load this element's content into Quill for editing/preview. The
-      // isLoadingIntoQuill guard (text-formatting.js) prevents this from
-      // being mistaken for a user edit and re-triggering a state write.
       isLoadingIntoQuill = true;
       quill.root.innerHTML = elData.content;
       isLoadingIntoQuill = false;
@@ -415,8 +439,9 @@ function syncPropertiesPanel() {
 
 // --- Init ---------------------------------------------------------------
 
-cacheSlotZoomMetrics(); // measure once, before any zoom/card-size sizing runs
-applyCardSizeToCanvas(); // sets initial pixel size/subtitle from card-sizes.js
-applyZoomToBothSides(parseInt(canvasZoomSlider.value)); // establishes initial slot sizing at 100%
+cacheSlotZoomMetrics();
+applyCardSizeToCanvas();
+applyZoomToBothSides(parseInt(canvasZoomSlider.value));
 renderAllPalettes();
+updateClipboardButtonStates(); // Copy/Paste start disabled — nothing selected, empty clipboard
 pushHistory();

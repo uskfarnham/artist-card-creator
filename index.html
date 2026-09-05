@@ -23,6 +23,10 @@
         <button type="button" class="btn secondary" id="undoBtn" title="Undo (Ctrl+Z)" style="width: auto;">↶ Undo</button>
         <button type="button" class="btn secondary" id="redoBtn" title="Redo (Ctrl+Y)" style="width: auto;">↷ Redo</button>
         <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 8px;"></div>
+        <button type="button" class="btn secondary" id="cutBtn" title="Cut (Ctrl+X)" style="width: auto;">✂️ Cut</button>
+        <button type="button" class="btn secondary" id="copyBtn" title="Copy (Ctrl+C)" style="width: auto;">📋 Copy</button>
+        <button type="button" class="btn secondary" id="pasteBtn" title="Paste (Ctrl+V)" style="width: auto;">📄 Paste</button>
+        <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 8px;"></div>
         <button type="button" class="btn secondary" id="loadBtn" style="width: auto;">📂 Load</button>
         <button type="button" class="btn secondary" id="saveBtn" style="width: auto;">💾 Save As...</button>
         <button type="button" class="btn" id="printFrontBtn" style="width: auto;">🖨️ Print Front</button>
@@ -67,7 +71,12 @@
                 </label>
                 <input type="range" id="canvasZoomSlider" min="50" max="200" value="100" step="2">
               </div>
-
+              <label class="tooltip-container" style="font-size: 13px; cursor: pointer; display: flex; align-items: center; margin-bottom: 12px; color: var(--text-color); font-weight: 500;">
+                <input type="checkbox" id="multiSelectToggle" style="margin-right: 8px; width: 16px; height: 16px; accent-color: var(--accent-color);">
+                Multi-Select Mode
+                <span class="info-icon">i</span>
+                <span class="tooltip-text">On desktop, hold Shift while tapping elements to add them to the selection. Shift needs a physical keyboard, so on a touch screen turn this on instead — each tap then adds/removes that element (or its group) from the selection rather than starting a drag. Turn off to resume normal tap-and-drag.</span>
+              </label>
               <label class="tooltip-container" style="font-size: 13px; cursor: pointer; display: flex; align-items: center; margin-bottom: 12px; color: var(--text-color); font-weight: 500;">
                 <input type="checkbox" id="gridSnapToggle" checked style="margin-right: 8px; width: 16px; height: 16px; accent-color: var(--accent-color);">
                 Grid Snapping
@@ -366,6 +375,8 @@
   <script src="js/card-sides.js"></script>
   <script src="js/card-sizes.js"></script>
   <script src="js/elements.js"></script>
+  <script src="js/clipboard.js"></script>
+  <script src="js/drag-resize.js"></script>
   <script src="js/drag-resize.js"></script>
   <script src="js/text-formatting.js"></script>
   <script src="js/background.js"></script>

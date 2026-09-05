@@ -210,6 +210,7 @@ body.is-resizing-nesw * { cursor: nesw-resize !important; }
 }
 .btn:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(37,99,235,0.2); }
 .btn:active { transform: translateY(0); box-shadow: none; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .btn.secondary { background: #ffffff; color: #374151; border: 1px solid #d1d5db; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .btn.secondary:hover { background: #f9fafb; border-color: #9ca3af; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
 .btn.danger { background: #ffffff; color: #ef4444; border: 1px solid #fca5a5; }

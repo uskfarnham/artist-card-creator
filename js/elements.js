@@ -517,18 +517,39 @@ function applyStylesToDOM(id, elDataOverride) {
 
 function moveLayer(direction) {
   const selected = state.elements.filter(e => e.selected);
-  if (selected.length !== 1) return;
+  if (selected.length === 0) return;
 
-  const el = selected[0];
+  // Sort by current zIndex first — every branch below relies on array
+  // order matching stacking order, same assumption the original
+  // single-element version made.
   state.elements.sort((a, b) => a.zIndex - b.zIndex);
-  const index = state.elements.findIndex(e => e.id === el.id);
 
-  state.elements.splice(index, 1);
-
-  if (direction === 'front') state.elements.push(el);
-  else if (direction === 'back') state.elements.unshift(el);
-  else if (direction === 'forward') state.elements.splice(Math.min(state.elements.length, index + 1), 0, el);
-  else if (direction === 'backward') state.elements.splice(Math.max(0, index - 1), 0, el);
+  if (direction === 'front') {
+    // Stable partition: the selected elements move to the top as ONE
+    // block, keeping their relative order — a multi-select or group
+    // doesn't get internally scrambled by this.
+    const others = state.elements.filter(e => !e.selected);
+    state.elements = [...others, ...selected];
+  } else if (direction === 'back') {
+    const others = state.elements.filter(e => !e.selected);
+    state.elements = [...selected, ...others];
+  } else if (direction === 'forward') {
+    // Single descending pass: each selected element swaps with the next
+    // slot up ONLY if that slot isn't also selected — this lets the whole
+    // selection bubble past the nearest unselected neighbor without
+    // selected elements leapfrogging each other.
+    for (let i = state.elements.length - 2; i >= 0; i--) {
+      if (state.elements[i].selected && !state.elements[i + 1].selected) {
+        [state.elements[i], state.elements[i + 1]] = [state.elements[i + 1], state.elements[i]];
+      }
+    }
+  } else if (direction === 'backward') {
+    for (let i = 1; i < state.elements.length; i++) {
+      if (state.elements[i].selected && !state.elements[i - 1].selected) {
+        [state.elements[i], state.elements[i - 1]] = [state.elements[i - 1], state.elements[i]];
+      }
+    }
+  }
 
   state.elements.forEach((e, i) => {
     e.zIndex = i + 1;

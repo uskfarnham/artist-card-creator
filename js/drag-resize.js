@@ -224,7 +224,7 @@ function initDrag(e, id) {
   const clickedEl = state.elements.find(el => el.id === id);
   if (!clickedEl) return;
 
-  if (e.shiftKey) {
+  if (e.shiftKey || multiSelectModeActive) {
     const targetState = !clickedEl.selected;
     if (clickedEl.groupId) {
       state.elements.filter(el => el.groupId === clickedEl.groupId).forEach(el => el.selected = targetState);
@@ -247,10 +247,6 @@ function initDrag(e, id) {
   const startX = e.clientX;
   const startY = e.clientY;
 
-  // Track each selected element's own native geometry — lines store
-  // endpoints (x1,y1,x2,y2), everything else stores x,y. Recording which
-  // shape each one is up front means onPointerMove doesn't need to
-  // re-check el.type/shapeKind on every single move event.
   const initialGeometry = selectedElements.map(el => {
     if (el.type === 'shape' && el.shapeKind === 'line') {
       return { id: el.id, isLine: true, x1: el.x1, y1: el.y1, x2: el.x2, y2: el.y2 };
@@ -259,19 +255,11 @@ function initDrag(e, id) {
   });
 
   const primaryEl = state.elements.find(e => e.id === id);
-  // The primary element's bounding box drives snapping for the whole
-  // selection — getElementBoundingBox (elements.js) returns primaryEl's
-  // own x/y/width/height for text/image/box-shapes, or the derived box
-  // for a line, so this works whichever kind was actually clicked.
   const primaryBox = getElementBoundingBox(primaryEl);
 
   document.body.classList.add('is-dragging');
   activeInteraction = 'drag';
 
-  // Capture the pointer on the element that started the drag — events for
-  // this pointerId now route here regardless of what's physically under
-  // the cursor (fast movement off the element, off-canvas, etc.), instead
-  // of relying on window-level listeners plus hoping pointerup always fires.
   const captureTarget = e.currentTarget;
   captureTarget.setPointerCapture(e.pointerId);
 

@@ -87,13 +87,16 @@ CARD_SIDE_KEYS.forEach(side => {
   node.addEventListener('pointerdown', (e) => {
     if (side !== currentSide) switchToSide(side);
 
-    // Blank-canvas click deselects — same behavior as the old single-canvas
-    // version in main.js, just now applied per-side and only once this side
-    // is confirmed active (the check above may have just made it so).
+    // Blank-canvas tap deselects — but NOT while building a multi-select
+    // (main.js's Multi-Select Mode toggle), otherwise a stray tap between
+    // elements would wipe out the selection the person is deliberately
+    // assembling one tap at a time.
     if (e.target === node || e.target.classList.contains('safe-zone')) {
       releaseFocusForCanvasInteraction();
-      state.elements.forEach(el => el.selected = false);
-      syncSelectionToDOM();
+      if (!multiSelectModeActive) {
+        state.elements.forEach(el => el.selected = false);
+        syncSelectionToDOM();
+      }
     }
   }, true);
 });
