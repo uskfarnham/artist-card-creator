@@ -76,6 +76,25 @@ function normalizeFontFamilyValue(value) {
   return value.replace(/['"]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+function updateItalicAvailability(fontFamilyValue) {
+  const target = normalizeFontFamilyValue(fontFamilyValue);
+  const isUnavailable = CUSTOM_FONTS_NO_ITALIC.some(
+    name => target.includes(normalizeFontFamilyValue(name))
+  );
+  btnItalic.disabled = isUnavailable;
+  btnItalic.title = isUnavailable
+    ? 'No true italic face for this font'
+    : 'Italic';
+
+  // Strip any existing italic formatting when switching TO a no-italic
+  // font — otherwise a range italicized under a different font keeps a
+  // faux-slant with no way to toggle it off via the now-disabled button.
+  if (isUnavailable) {
+    const range = getQuillSelectionOrNull();
+    if (range) quill.formatText(range.index, range.length, 'italic', false);
+  }
+}
+
 // Sets a <select>'s value by normalized match against its options, rather
 // than requiring an exact string match (see normalizeFontFamilyValue above).
 function setFontFamilySelectValue(selectEl, rawValue) {
@@ -83,6 +102,12 @@ function setFontFamilySelectValue(selectEl, rawValue) {
   const match = Array.from(selectEl.options).find(
     opt => normalizeFontFamilyValue(opt.value) === target
   );
+
+  if (match) {
+    selectEl.value = match.value;
+    selectEl.style.fontFamily = match.value; // closed select box renders in the selected font too
+  }
+
   selectEl.value = match ? match.value : selectEl.value; // leave unchanged if no match found at all
 }
 
@@ -188,6 +213,8 @@ function syncToolbarToSelection(range) {
   btnAlignLeftText.classList.toggle('active', align === 'left');
   btnAlignCenterText.classList.toggle('active', align === 'center');
   btnAlignRightText.classList.toggle('active', align === 'right');
+
+  updateItalicAvailability(format.font || elData.style.fontFamily);
 }
 
 // --- Sidebar toolbar buttons -> Quill formatting API -------------------------
@@ -255,6 +282,8 @@ btnAlignRightText.addEventListener('click', () => {
 
 propInputs.fontFamily.addEventListener('change', (e) => {
   const range = getQuillSelectionOrNull();
+  updateItalicAvailability(e.target.value);
+  e.target.style.fontFamily = e.target.value; // reflect the chosen font in the closed select box
   if (!range) return;
   quill.format('font', e.target.value);
 });

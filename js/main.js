@@ -407,6 +407,9 @@ function syncPropertiesPanel() {
     if (elData.type === 'text') {
       textPropertiesGroup.style.display = 'block';
 
+      // Load this element's content into Quill for editing/preview. The
+      // isLoadingIntoQuill guard (text-formatting.js) prevents this from
+      // being mistaken for a user edit and re-triggering a state write.
       isLoadingIntoQuill = true;
       quill.root.innerHTML = elData.content;
       isLoadingIntoQuill = false;
@@ -414,6 +417,7 @@ function syncPropertiesPanel() {
       setFontFamilySelectValue(propInputs.fontFamily, elData.style.fontFamily);
       propInputs.fontSize.value = elData.style.fontSize;
       propInputs.color.value = elData.style.color;
+      updateItalicAvailability(elData.style.fontFamily);
     } else if (elData.type === 'image') {
       imagePropertiesGroup.style.display = 'block';
     } else if (elData.type === 'shape') {

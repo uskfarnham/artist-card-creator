@@ -9,6 +9,7 @@
 
   <!-- Quill rich text editor (sidebar-only; canvas shows a read-only preview) -->
   <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+  <script src="js/fonts.js"></script>
 </head>
 <body>
 
@@ -229,19 +230,37 @@
 
             <div class="form-group">
               <label>Font Family</label>
-              <select id="propFontFamily" class="form-control">
-                <option value="Arial, sans-serif">Arial</option>
-                <option value="'Arial Black', Gadget, sans-serif">Arial Black</option>
-                <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans MS</option>
-                <option value="'Courier New', Courier, monospace">Courier New</option>
-                <option value="'Georgia', serif">Georgia</option>
-                <option value="Impact, Charcoal, sans-serif">Impact</option>
-                <option value="'Tahoma', Geneva, sans-serif">Tahoma</option>
-                <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                <option value="'Trebuchet MS', Helvetica, sans-serif">Trebuchet MS</option>
-                <option value="'Verdana', Geneva, sans-serif">Verdana</option>
-                <!-- Self-hosted Google Fonts will be appended here once fonts/
-                     is populated — see PROJECT_STATUS.md -->
+              <select id="propFontFamily" class="form-control" style="font-family: Arial, sans-serif;">
+                <optgroup label="Sans-serif">
+                  <option value="Arial, sans-serif" style="font-family: Arial, sans-serif;">Arial</option>
+                  <option value="'Inter', sans-serif" style="font-family: 'Inter', sans-serif;">Inter</option>
+                  <option value="'Oswald', sans-serif" style="font-family: 'Oswald', sans-serif;">Oswald</option>
+                  <option value="'Tahoma', Geneva, sans-serif" style="font-family: 'Tahoma', Geneva, sans-serif;">Tahoma</option>
+                  <option value="'Trebuchet MS', Helvetica, sans-serif" style="font-family: 'Trebuchet MS', Helvetica, sans-serif;">Trebuchet MS</option>
+                  <option value="'Verdana', Geneva, sans-serif" style="font-family: 'Verdana', Geneva, sans-serif;">Verdana</option>
+                  <option value="'Work Sans', sans-serif" style="font-family: 'Work Sans', sans-serif;">Work Sans</option>
+                </optgroup>
+                <optgroup label="Serif">
+                  <option value="'Cormorant Garamond', serif" style="font-family: 'Cormorant Garamond', serif;">Cormorant Garamond</option>
+                  <option value="'Georgia', serif" style="font-family: 'Georgia', serif;">Georgia</option>
+                  <option value="'Lora', serif" style="font-family: 'Lora', serif;">Lora</option>
+                  <option value="'Playfair Display', serif" style="font-family: 'Playfair Display', serif;">Playfair Display</option>
+                  <option value="'Times New Roman', Times, serif" style="font-family: 'Times New Roman', Times, serif;">Times New Roman</option>
+                </optgroup>
+                <optgroup label="Monospace">
+                  <option value="'Courier New', Courier, monospace" style="font-family: 'Courier New', Courier, monospace;">Courier New</option>
+                </optgroup>
+                <optgroup label="Display">
+                  <option value="'Abril Fatface', cursive" style="font-family: 'Abril Fatface', cursive;">Abril Fatface</option>
+                  <option value="'Arial Black', Gadget, sans-serif" style="font-family: 'Arial Black', Gadget, sans-serif;">Arial Black</option>
+                  <option value="'Bebas Neue', cursive" style="font-family: 'Bebas Neue', cursive;">Bebas Neue</option>
+                  <option value="Impact, Charcoal, sans-serif" style="font-family: Impact, Charcoal, sans-serif;">Impact</option>
+                </optgroup>
+                <optgroup label="Script &amp; Handwritten">
+                  <option value="'Caveat', cursive" style="font-family: 'Caveat', cursive;">Caveat</option>
+                  <option value="'Comic Sans MS', cursive, sans-serif" style="font-family: 'Comic Sans MS', cursive, sans-serif;">Comic Sans MS</option>
+                  <option value="'Dancing Script', cursive" style="font-family: 'Dancing Script', cursive;">Dancing Script</option>
+                </optgroup>
               </select>
             </div>
 

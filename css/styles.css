@@ -229,6 +229,15 @@ body.is-resizing-nesw * { cursor: nesw-resize !important; }
 .toolbar-btn:last-child { border-right: none; }
 .toolbar-btn:hover { background: #f3f4f6; color: #111827; }
 .toolbar-btn.active { background: #eff6ff; color: var(--accent-color); font-weight: bold; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+.toolbar-btn:disabled {
+  cursor: not-allowed;
+  color: #d1d5db;
+  background: #f9fafb;
+}
+.toolbar-btn:disabled:hover {
+  background: #f9fafb; /* override the normal hover state — no visual response */
+  color: #d1d5db;
+}
 
 /* --- UI Components: Forms & Typography --- */
 h2 { font-size: 0.75rem; text-transform: uppercase; color: var(--label-color); margin-bottom: 16px; letter-spacing: 0.05em; font-weight: 700; }
@@ -243,6 +252,18 @@ hr { border: none; border-top: 1px solid var(--border-color); margin: 24px 0; }
 .form-control:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 
 textarea.form-control { resize: vertical; min-height: 80px; font-family: monospace; font-size: 12px; }
+
+/* #propFontFamily's own font-family is set dynamically via JS
+   (text-formatting.js) so the closed select box previews the selected
+   font. Each <option> has its own inline style that already overrides
+   this inheritance, but <optgroup> labels have no inline style of their
+   own — left alone they'd inherit the select's dynamic font too. Force
+   them back to the app's base UI font explicitly. */
+#propFontFamily optgroup {
+  font-family: Arial, sans-serif;
+  font-weight: 700; /* restore standard optgroup boldness — some browsers
+                        derive this from font-family too */
+}
 
 /* --- Quill editor container (replaces the old .rich-editor contenteditable div) --- */
 #quillEditorContainer {

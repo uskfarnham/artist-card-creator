@@ -28,6 +28,12 @@ const PREFERRED_MARGIN_TOP_MM = 11;
 const PAGE_WIDTH_MM = 210;
 const PAGE_HEIGHT_MM = 297;
 
+// Absolute base URL for font files — the print sheet is a separate blob:
+// document, where relative paths don't reliably resolve (see fonts.js
+// header comment). Computed from the REAL page's location, not the
+// eventual blob address.
+const PRINT_FONT_BASE_URL = new URL('fonts/', window.location.href).href;
+
 function fitAxis(pageMm, cardMm, preferredMarginMm) {
   const countAtPreferred = Math.max(1, Math.floor((pageMm - 2 * preferredMarginMm) / cardMm));
   const countAtMin = Math.max(1, Math.floor((pageMm - 2 * MIN_MARGIN_MM) / cardMm));
@@ -261,6 +267,7 @@ function compileToPrintSheet(jsonLayoutState, mirrorHorizontal = false, sideLabe
   <meta charset="UTF-8">
   <title>Print Sheet${titleSuffix}</title>
   <style>
+    ${buildFontFaceCSS(PRINT_FONT_BASE_URL)}
     @page { size: ${pageSizeCss}; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -285,8 +292,16 @@ function compileToPrintSheet(jsonLayoutState, mirrorHorizontal = false, sideLabe
     </div>
   </div>
   <script>
-    if (document.readyState === 'complete') { window.print(); }
-    else { window.addEventListener('DOMContentLoaded', () => window.print()); }
+    function triggerPrint() {
+      if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => window.print());
+        } else {
+          window.print();
+        }
+      }
+      if (document.readyState === 'complete') { triggerPrint(); }
+      else { window.addEventListener('DOMContentLoaded', triggerPrint); 
+    }
   <\/script>
 </body>
 </html>`;

@@ -1,7 +1,7 @@
 # Project Status — Artist Card Creator
 *(renamed from "Business Card Creator")*
 
-_Last updated: 2026-09-01_
+_Last updated: 2026-09-22_
 
 ---
 
@@ -18,6 +18,7 @@ Shift/lock-proportions constrain), styling (fill/stroke/width), layering,
 alignment, grouping, arrow-key nudge, undo/redo, save/load, and print/PDF
 output. Polygon and star remain deferred (see Backlog).
 
+
 ### File structure
 ```
 artist-card-creator/
@@ -26,7 +27,9 @@ artist-card-creator/
 │   └── styles.css
 ├── js/
 │   ├── state.js
+│   ├── card-sides.js
 │   ├── card-sizes.js
+│   ├── fonts.js
 │   ├── elements.js
 │   ├── drag-resize.js
 │   ├── text-formatting.js
@@ -34,8 +37,11 @@ artist-card-creator/
 │   ├── save-load.js
 │   ├── print.js
 │   └── main.js
-├── fonts/          ← not yet populated
+├── fonts/          ← 23 self-hosted .woff2 files (10 families)
 └── PROJECT_STATUS.md
+```
+
+
 ```
 Plain `<script>` tags (not ES modules) — top-level `const`/`let` share one global
 lexical scope across all classic scripts on the page, so modules can reference
@@ -140,6 +146,71 @@ the preview's content node, matching what `print.js` already did.
 
 ---
 
+## Resolved: Cut/Copy/Paste + Touch Multi-Select + Multi-Select Layer Depth (2026-09-05)
+
+Replaces the backlog's "Duplicate element function" item with a fuller
+cut/copy/paste model. Cross-side paste works for free — paste always
+targets whatever `state`/`canvas` currently point to (the active side), so
+"paste onto the other face" is just: copy/cut on Front, tap the Back
+canvas to switch to it, paste. No separate "paste to other side" plumbing
+was needed, unlike the cross-side handling `card-sizes.js` needs for size
+changes.
+
+- **New file `js/clipboard.js`** — module-level `clipboard` array, kept
+  outside `state`/`cardSides` (same reasoning as `sharedPalette`) so it
+  survives a side switch, where `state` itself gets reassigned wholesale.
+  `copySelectedElements()` deep-clones the current selection.
+  `cutSelectedElements()` is copy + removal as a single undo step, not two.
+  `pasteClipboard()` regenerates element ids, remaps `groupId`s (only ids
+  present *within the clipboard itself* get a fresh shared id, so pasting
+  doesn't merge into the original group), assigns zIndex above the current
+  max, and cascades position via its own offset counter — mirrors
+  `elements.js`'s `spawnOffset` pattern for newly-created elements, kept
+  separate so the two don't interfere with each other's sequence.
+- **Same-side paste offset**: cascades 15px per paste (wraps at 80, never
+  back to 0) so a paste never lands exactly on top of the original.
+- **Toolbar**: Cut / Copy / Paste buttons in the topbar, enabled/disabled
+  via `updateClipboardButtonStates()` (selection present / clipboard
+  non-empty), called from `syncSelectionToDOM()` so the buttons never go
+  stale relative to the current selection.
+- **Keyboard shortcuts**: Ctrl/Cmd+X/C/V, guarded by the existing `isInput`
+  check (native cut/copy/paste inside Quill or form inputs is untouched)
+  AND by "is there actually a selection/clipboard to act on" — so the
+  shortcut doesn't swallow normal browser copy when nothing on the canvas
+  is selected.
+- **Touch multi-select**: new "Multi-Select Mode" checkbox (Canvas
+  Settings accordion) stands in for Shift-click, which needs a physical
+  keyboard. `initDrag` (`drag-resize.js`) now checks
+  `e.shiftKey || multiSelectModeActive`. Blank-canvas tap-to-deselect
+  (`card-sides.js`) is suppressed while the mode is active, so an
+  accidental tap between elements doesn't wipe out a selection being built
+  up one tap at a time.
+- **Layer Depth on multi-select/groups**: `moveLayer()` (`elements.js`) no
+  longer requires exactly one selected element. Front/Back moves the whole
+  selection as one stable block (relative order preserved via a stable
+  partition). Forward/Backward uses a single directional pass, swapping
+  each selected element only with an adjacent NON-selected neighbor — lets
+  the whole selection bubble past the nearest unselected element without
+  selected elements leapfrogging each other within the same pass.
+  `syncPropertiesPanel()` now shows the Layer Depth panel for ANY
+  non-empty selection (previously single-element only) — a tapped group
+  already auto-selects every member via existing `initDrag` behavior, so
+  this covers groups with no group-specific code required.
+
+### Files touched
+`js/clipboard.js` (new), `index.html`, `js/main.js`, `js/drag-resize.js`,
+`js/card-sides.js`, `js/elements.js`
+
+### Backlog: resolved
+- ~~Duplicate element function~~ — superseded by the cut/copy/paste model
+  above, which also resolves that item's open design questions: trigger
+  (toolbar buttons + keyboard shortcuts), multi-select handling (batched
+  clone with relative offsets preserved), and `groupId` handling (fresh
+  group per paste, remapped only within the clipboard's own contents).
+
+
+---
+
 ## Resolved: Double-click-to-edit broken by pointer-capture drag rewrite (2026-09-03)
 
 Double-clicking a canvas text element to hand off to the sidebar Quill
@@ -162,6 +233,50 @@ timestamp + position check (closure-scoped `lastPointerDown`), before
 reliable, since touch `dblclick` synthesis was already flaky — one code
 path now covers both input types instead of relying on the browser to
 synthesize an event that pointer-capture drag logic was silently eating.
+
+---
+
+## Resolved: Self-Hosted Font Library (2026-09-22)
+
+Added 10 self-hosted fonts (`fonts/` — previously empty, now populated;
+see Backlog, "Self-host fonts") alongside the original 10 system/web-safe
+fonts, spanning sans-serif, serif, display, and script/handwritten
+categories. `js/fonts.js` is the single source of truth: one `CUSTOM_FONTS`
+list drives `@font-face` generation for **two independent documents** —
+the main app (relative paths, injected at load) and `print.js`'s
+generated print sheet.
+
+- **Print sheet needs absolute font URLs.** `compileToPrintSheet` opens a
+  fully separate document via Blob URL in a new tab — it does not inherit
+  `index.html`'s `<head>`, and relative paths (`fonts/Inter-Regular.woff2`)
+  don't reliably resolve against a `blob:` address. `print.js` now computes
+  `PRINT_FONT_BASE_URL` from the real page's `window.location` and calls
+  `buildFontFaceCSS(PRINT_FONT_BASE_URL)` to inject matching `@font-face`
+  rules directly into the print sheet's own `<style>` block.
+- **Print must wait for fonts to actually load.** The auto-print script
+  previously fired `window.print()` on `readyState === 'complete'` /
+  `DOMContentLoaded` — neither waits for webfonts. Now gated on
+  `document.fonts.ready`, so the print dialog can't fire mid-download and
+  silently fall back to a system font.
+- **Not every font has a true italic face.** Dancing Script, Caveat, Abril
+  Fatface, Bebas Neue, and Oswald ship no italic weight at all (Oswald was
+  initially assumed to have one from a general check of the family — a
+  second, closer check of the actual shipped files corrected this).
+  `CUSTOM_FONTS_NO_ITALIC` drives `updateItalicAvailability()`
+  (`text-formatting.js`), which disables the Italic toolbar button for
+  these fonts (rather than allowing browser faux-slant) and strips any
+  existing italic formatting from the current Quill selection when
+  switching to one. Wired into every path that can change the active
+  font/element: the font-family dropdown's `change` handler,
+  `syncToolbarToSelection` (cursor movement through mixed-font text),
+  `activateTextEditor` (double-click-to-edit), and `syncPropertiesPanel`
+  (new element creation / single-select — this last one was an initial
+  gap: new text boxes reset the dropdown to Arial but left the Italic
+  button's disabled state stale from whatever was previously shown).
+- **Dropdown UX** — `#propFontFamily` is now grouped by type (Sans-serif,
+  Serif, Monospace, Display, Script & Handwritten) and alphabetical within
+  each group, with every `<option>` inline-styled to render in its own
+  font. `setFontFamilySelectValue` also sets the *closed* select's own
 
 ---
 
@@ -231,7 +346,6 @@ synthesize an event that pointer-capture drag logic was silently eating.
         element, to keep undo/redo granularity sane.
 
 ### Medium Priority
-- [ ] **Self-host fonts** — `fonts/` directory exists but is empty.
 - [ ] **Card size configuration** — `card-sizes.js` has the data model;
       needs a size-selector UI (Canvas Settings accordion) calling
       `setCurrentCardSize()`, plus wiring it to actually resize
@@ -360,6 +474,40 @@ synthesize an event that pointer-capture drag logic was silently eating.
   to isolate whether the discrepancy is geometric or content/rendering —
   here, the line's coordinates matched perfectly, which pointed straight
   at text rendering rather than any print-specific scaling bug.
+- A touch-inaccessible modifier key (Shift) is best paired with a
+  persistent checkbox toggle standing in for it — same pattern as Lock
+  Proportions. Cheaper than inventing a new gesture (long-press,
+  marquee-select) and consistent with how the app already solves this
+  class of problem.
+- Multi-element layer reordering needs different logic per direction:
+  front/back is a stable partition (the selected block moves as a whole),
+  but forward/backward needs a single adjacent-swap pass that only swaps a
+  selected element with an *unselected* neighbor — swapping two selected
+  elements past each other in the same pass would just reshuffle the
+  selection internally without changing its position relative to the rest
+  of the stack.
+- Clipboard state that must survive a side switch can't live in `state` or
+  `cardSides` — anything needed across a side switch (where `state` itself
+  gets reassigned) needs its own module-level variable, same reasoning
+  already noted for `sharedPalette`.
+  - A print/export pipeline that opens content in a **separate document**
+  (new tab, iframe, Blob URL) never inherits the main page's `<head>` —
+  any resource that document needs (fonts, stylesheets) has to be
+  independently referenced there too, and relative paths are unreliable
+  against a `blob:` address specifically — resolve to an absolute URL from
+  `window.location` instead. Relevant to any future export/print feature,
+  not just fonts.
+- `window.print()` (or any auto-triggered print/export) needs to wait on
+  `document.fonts.ready`, not just `DOMContentLoaded` — the latter doesn't
+  account for webfont download time and can silently print/export in a
+  fallback font with no error.
+- **Verify font family metadata (e.g. "has an italic face") against the
+  actual shipped files, not a general assumption about the family** — an
+  initial pass across the self-hosted set assumed most families had a
+  true italic; a closer check of the actual `@fontsource` package files
+  showed Oswald has none at any weight, despite looking similar to other
+  sans-serifs that do. Cheap to verify, expensive to have wrong silently
+  (faux-slant with no way to disable it).
 
 ## Tools & Resources
 - **Quill** (rich text editor, sidebar-only) — `js/text-formatting.js`
